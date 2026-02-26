@@ -1,0 +1,92 @@
+default_stages:
+  - pre-commit
+  - post-rewrite
+
+repos:
+  - repo: local
+    hooks:
+      - name: All executables should be shebang scripts
+        id: check-executables-have-shebangs
+        language: system
+        entry: ./scripts/check_executables_have_shebangs.sh
+
+      - name: All shebang scripts should be executable
+        id: check-shebang-scripts-are-executable
+        language: system
+        entry: ./scripts/check_shebang_scripts_are_executable.sh
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - name: All non-empty files should end with a newline
+        id: end-of-file-fixer
+
+      - name: No files should have trailing whitespaces
+        id: trailing-whitespace
+
+  - repo: local
+    hooks:
+      - name: Check file line counts
+        id: check-line-counts
+        language: system
+        entry: ./scripts/check_line_counts.sh
+        types_or:
+          - python
+          - shell
+
+  - repo: https://github.com/hukkin/mdformat
+    rev: 1.0.0
+    hooks:
+      - name: Format Markdown files
+        id: mdformat
+        additional_dependencies:
+          # This doesn't compile in Docker containers.
+          # - mdformat-config
+          - mdformat-ruff
+          - mdformat-shfmt
+          - mdformat-frontmatter
+          - mdformat-gfm
+          - mdformat-gfm-alerts
+
+  - repo: https://github.com/rbubley/mirrors-prettier
+    rev: v3.7.4
+    hooks:
+      - name: Format YAML files
+        id: prettier
+        types:
+          - yaml
+
+  # This doesn't compile in Docker containers.
+  # - repo: https://github.com/ComPWA/taplo-pre-commit
+  #   rev: v0.9.3
+  #   hooks:
+  #     - name: Format TOML files
+  #       id: taplo-format
+
+  - repo: https://github.com/doublify/pre-commit-rust
+    rev: v1.0
+    hooks:
+      - name: Format Rust files
+        id: fmt
+
+  - repo: local
+    hooks:
+      - name: Lint Rust code with `cargo clippy`
+        id: cargo-clippy
+        language: system
+        entry: cargo clippy --all-targets --all-features
+        types:
+          - rust
+        pass_filenames: false
+
+  - repo: https://github.com/EmbarkStudios/cargo-deny
+    rev: 0.18.9
+    hooks:
+      - name: Check Cargo dependencies with `cargo deny`
+        id: cargo-deny
+
+  - repo: https://github.com/bnjbvr/cargo-machete
+    rev: v0.9.1
+    hooks:
+      - id: cargo-machete
+        name: Drop unused Rust dependencies

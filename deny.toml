@@ -1,0 +1,10 @@
+[graph]
+all-features = true
+
+[bans]
+multiple-versions = "allow"
+
+[licenses]
+allow = ["MIT", "Apache-2.0", "BSD-3-Clause", "Unicode-3.0", "Zlib"]
+# No need to validate the license expression of our own private projects.
+private = { ignore = true }

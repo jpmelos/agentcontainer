@@ -1,0 +1,218 @@
+[package]
+name = "agentcontainer"
+version = "0.1.0-dev"
+edition = "2024"
+description = "Agent containers."
+authors = ["João Sampaio <jpmelos@gmail.com>"]
+license = "MIT"
+homepage = "https://github.com/jpmelos/agentcontainer"
+repository = "https://github.com/jpmelos/agentcontainer"
+keywords = ["agent", "cli", "container"]
+categories = [
+  "artificial-intelligence",
+  "command-line-interface",
+  "command-line-utilities",
+  "development-tools",
+]
+readme = "README.md"
+include = ["Cargo.lock", "Cargo.toml", "LICENSE", "README.md", "src/*"]
+
+[dependencies]
+
+# How to ensure that this list is comprehensive: see `docs/lints.md`.
+[lints.rust]
+absolute_paths_not_starting_with_crate = "deny"
+ambiguous_negative_literals = "deny"
+# Renamed to `keyword_idents_2018`.
+# async_idents = "deny"
+closure_returning_async_block = "deny"
+deprecated_safe_2024 = "deny"
+deref_into_dyn_supertrait = "deny"
+# Renamed to `rust_2021_incompatible_closure_captures`.
+# disjoint_capture_migration = "deny"
+edition_2024_expr_fragment_specifier = "deny"
+# Renamed to `elided_lifetimes_in_paths`.
+# elided_lifetime_in_path = "deny"
+elided_lifetimes_in_paths = "deny"
+explicit_outlives_requirements = "deny"
+ffi_unwind_calls = "deny"
+# Unstable lint.
+# fuzzy_provenance_casts = "deny"
+if_let_rescope = "deny"
+impl_trait_overcaptures = "deny"
+impl_trait_redundant_captures = "deny"
+keyword_idents = "deny"
+keyword_idents_2018 = "deny"
+keyword_idents_2024 = "deny"
+let_underscore_drop = "deny"
+linker_messages = "deny"
+# Unstable lint.
+# lossy_provenance_casts = "deny"
+macro_use_extern_crate = "deny"
+meta_variable_misuse = "deny"
+missing_copy_implementations = "deny"
+missing_debug_implementations = "deny"
+missing_docs = "deny"
+missing_unsafe_on_extern = "deny"
+# Unstable lint.
+# multiple_supertrait_upcastable = "deny"
+# Unstable lint.
+# must_not_suspend = "deny"
+non_ascii_idents = "deny"
+# Unstable lint.
+# non_exhaustive_omitted_patterns = "deny"
+# Renamed to `rust_2021_incompatible_or_patterns`.
+# or_patterns_back_compat = "deny"
+redundant_imports = "deny"
+redundant_lifetimes = "deny"
+# Unknown lint.
+# resolving_to_items_shadowing_supertrait_items = "deny"
+rust_2021_incompatible_closure_captures = "deny"
+rust_2021_incompatible_or_patterns = "deny"
+rust_2021_prefixes_incompatible_syntax = "deny"
+rust_2021_prelude_collisions = "deny"
+rust_2024_guarded_string_incompatible_syntax = "deny"
+rust_2024_incompatible_pat = "deny"
+rust_2024_prelude_collisions = "deny"
+# Unknown lint.
+# shadowing_supertrait_items = "deny"
+# Renamed to `single_use_lifetimes`.
+# single_use_lifetime = "deny"
+single_use_lifetimes = "deny"
+tail_expr_drop_order = "deny"
+trivial_casts = "deny"
+trivial_numeric_casts = "deny"
+unit_bindings = "deny"
+unnameable_types = "deny"
+# Unstable lint.
+# unqualified_local_imports = "deny"
+unreachable_pub = "deny"
+unsafe_attr_outside_unsafe = "deny"
+unsafe_code = "deny"
+unsafe_op_in_unsafe_fn = "deny"
+unstable_features = "deny"
+unused_crate_dependencies = "deny"
+unused_extern_crates = "deny"
+unused_import_braces = "deny"
+unused_lifetimes = "deny"
+unused_macro_rules = "deny"
+unused_qualifications = "deny"
+# It's okay to not use results (return values) of function calls.
+# unused_results = "deny"
+variant_size_differences = "deny"
+warnings = "deny"
+
+[lints.clippy]
+cargo = { level = "deny", priority = -1 }
+complexity = { level = "deny", priority = -1 }
+correctness = { level = "deny", priority = -1 }
+nursery = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+perf = { level = "deny", priority = -1 }
+restriction = { level = "deny", priority = -1 }
+style = { level = "deny", priority = -1 }
+suspicious = { level = "deny", priority = -1 }
+# Functions that are called only once are allowed.
+single_call_fn = "allow"
+# Implicit returns are allowed.
+implicit_return = "allow"
+# It's okay to match all other enum items with a wildcard `_` in default match
+# arm.
+wildcard_enum_match_arm = "allow"
+# Let's not use lints to complain about documentation. This leads to excesses.
+missing_docs_in_private_items = "allow"
+missing_errors_doc = "allow"
+# Question marks are great!
+question_mark_used = "allow"
+# 1-char identifiers make sense sometimes.
+min_ident_chars = "allow"
+# Let enum items and other items be ordered in a way that makes sense to each
+# situation, instead of forcing it to be alphabetical.
+arbitrary_source_item_ordering = "allow"
+# Let's allow normal arithmetic without too much hassle.
+arithmetic_side_effects = "allow"
+# Let's allow normal indexing and slicing without too much hassle.
+indexing_slicing = "allow"
+# Allow the more verbose alternatives that keep the elements of the computation
+# in a more "natural" order. For example, prefer the first, not the second:
+# 1. option.map(|a| a + 1).unwrap_or(0);
+# 2. option.map_or(0, |a| a + 1);
+map_unwrap_or = "allow"
+# Using of expect is allowed since it requires a string to explain why this is
+# okay.
+expect_used = "allow"
+# Reusing variable names (shadowing) is fine.
+shadow_reuse = "allow"
+shadow_unrelated = "allow"
+shadow_same = "allow"
+# It's okay if the compiler just assumes `i32` and `f64` when it can't pinpoint
+# the appropriate type from the expression.
+default_numeric_fallback = "allow"
+# Implicitly using provided trait methods in trait implementations is fine.
+missing_trait_methods = "allow"
+# We're not going to mark all public methods as inline.
+missing_inline_in_public_items = "allow"
+# There's no need to mark stuff as "must use".
+must_use_candidate = "allow"
+# Allow public items to contain the name of the module that owns them. For
+# example, `config::RunnerConfig`.
+module_name_repetitions = "allow"
+# `let _ = ...` is fine without type annotation.
+let_underscore_untyped = "allow"
+# `let _ = ...` is fine even on must-use expressions.
+let_underscore_must_use = "allow"
+# Using `.clone` on reference-counted pointers is fine.
+clone_on_ref_ptr = "allow"
+# Allow structs named "Error" to implement `std::error::Error`.
+error_impl_error = "allow"
+# Re-exporting is fine.
+pub_use = "allow"
+# Usage of `ref` is fine.
+ref_patterns = "allow"
+# We prefer the style with `mod.rs` files.
+mod_module_files = "allow"
+# We'll allow rules as we find that we need them.
+blanket_clippy_restriction_lints = "allow"
+# These lints are inappropriate for std projects.
+std_instead_of_alloc = "allow"
+std_instead_of_core = "allow"
+# There are lots of duplicate crates caused by our dependencies...
+multiple_crate_versions = "allow"
+# Not every implementor of `Self::new()` should have a `Default::default()`,
+# because sometimes `Self::new()` doesn't return the same value (the
+# 0-equivalent) of `Self`.
+new_without_default = "allow"
+# Complexity is allowed, this is a discretion by the developer.
+type_complexity = "allow"
+too_many_lines = "allow"
+cognitive_complexity = "allow"
+# Better to have explicit notation. If something is a reference, the code
+# should unambiguously say so, even in pattern matching.
+needless_borrowed_reference = "allow"
+# Iterating over hash types is fine.
+iter_over_hash_type = "allow"
+# It is at the discretion of the developer when to drop resources.
+significant_drop_tightening = "allow"
+# Sometimes, this makes perfect sense.
+else_if_without_else = "allow"
+# Sometimes, we know some code cannot fail, even if it's inside a function that
+# returns a `Result` or an `Option`, and then it still makes sense to use
+# `unwrap` or `expect` inside such function.
+unwrap_in_result = "allow"
+# This is a discretion from the developer.
+match_wildcard_for_single_variants = "allow"
+# No need for explicit `#[must_use]`.
+return_self_not_must_use = "allow"
+# Signalling unreachable paths sometimes is necessary, since `match` must be
+# exhaustive.
+unreachable = "allow"
+# Replacing the closure with the method object directly makes the code less
+# readable, and incentivizes the use of fully-qualified names where it's
+# unnecessary.
+redundant_closure_for_method_calls = "allow"
+# Prefer `pub(crate)` instead of `pub(in crate)`.
+pub_with_shorthand = "allow"
+# Redundant `pub(crate)` is fine, developers should be able to set the right
+# visibility level without having to change it later when a module is made
+# public.
+redundant_pub_crate = "allow"
