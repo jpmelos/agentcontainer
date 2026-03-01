@@ -29,6 +29,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install pre-commit==${{ env.PRECOMMIT_VERSION }}
 
+      - name: Cache pre-commit environments
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/pre-commit
+          key: python-${{ env.PYTHON_VERSION }}-pre-commit-${{ env.PRECOMMIT_VERSION }}-${{ hashFiles('.pre-commit-config.yaml') }}
+
       - name: Install cargo-nextest
         run: cargo install --locked cargo-nextest
 
