@@ -2,7 +2,7 @@
 name = "agentcontainer"
 version = "0.1.0-dev"
 edition = "2024"
-description = "Agent containers."
+description = "A standard way to declare and run agent containers for your projects."
 authors = ["João Sampaio <jpmelos@gmail.com>"]
 license = "MIT"
 homepage = "https://github.com/jpmelos/agentcontainer"
@@ -18,6 +18,16 @@ readme = "README.md"
 include = ["Cargo.lock", "Cargo.toml", "LICENSE", "README.md", "src/*"]
 
 [dependencies]
+anyhow = "1.0.102"
+clap = { version = "4.5.60", features = ["derive"] }
+figment = { version = "0.10.19", features = ["toml", "env"] }
+serde = { version = "1.0.228", features = ["derive"] }
+toml = "1.0.3"
+
+[dev-dependencies]
+assert_cmd = "2.1.2"
+predicates = "3.1.4"
+tempfile = "3.26.0"
 
 # How to ensure that this list is comprehensive: see `docs/lints.md`.
 [lints.rust]
@@ -88,7 +98,8 @@ unnameable_types = "deny"
 # unqualified_local_imports = "deny"
 unreachable_pub = "deny"
 unsafe_attr_outside_unsafe = "deny"
-unsafe_code = "deny"
+# Clippy already enforces that all `unsafe` code be documented.
+# unsafe_code = "deny"
 unsafe_op_in_unsafe_fn = "deny"
 unstable_features = "deny"
 unused_crate_dependencies = "deny"
