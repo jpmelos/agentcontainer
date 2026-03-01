@@ -18,6 +18,7 @@ lowest to highest priority:
 | XDG global config     | `~/.config/agentcontainer/config.toml` |
 | Home dotfile          | `~/.agentcontainer.toml`               |
 | Project config        | `.agentcontainer/config.toml`          |
+| Local project config  | `.agentcontainer/config.local.toml`    |
 | Environment variables | `AGENTCONTAINER_<KEY>`                 |
 | CLI arguments         | `--<key>` flags                        |
 
