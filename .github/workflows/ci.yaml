@@ -34,6 +34,7 @@ jobs:
         with:
           path: ~/.cache/pre-commit
           key: python-${{ env.PYTHON_VERSION }}-pre-commit-${{ env.PRECOMMIT_VERSION }}-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: python-${{ env.PYTHON_VERSION }}-pre-commit-${{ env.PRECOMMIT_VERSION }}
 
       - name: Install cargo-nextest
         run: cargo install --locked cargo-nextest
