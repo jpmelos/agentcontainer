@@ -48,6 +48,7 @@ pub(crate) enum Command {
 /// - `~/.config/agentcontainer/config.toml`
 /// - `~/.agentcontainer.toml`
 /// - `.agentcontainer/config.toml`
+/// - `.agentcontainer/config.local.toml`
 /// - Environment variables prefixed by `AGENTCONTAINER_`.
 /// - CLI arguments.
 pub(crate) fn get_config<'cli_args>(
@@ -61,6 +62,7 @@ pub(crate) fn get_config<'cli_args>(
         )))
         .merge(Toml::file(format!("{home_dir}/.agentcontainer.toml")))
         .merge(Toml::file(".agentcontainer/config.toml"))
+        .merge(Toml::file(".agentcontainer/config.local.toml"))
         .merge(Env::prefixed("AGENTCONTAINER_"));
 
     // Only merge CLI arguments that were actually provided to avoid overriding config values with
@@ -198,6 +200,29 @@ mod tests {
     }
 
     #[test]
+    fn cwd_local_config_file_is_read() {
+        let home_dir = tempdir().expect("Failed to create temporary directory.");
+        let cwd = tempdir().expect("Failed to create temporary directory.");
+        write_file(
+            &cwd.path().join(".agentcontainer/config.local.toml"),
+            r#"dockerfile = "from-cwd-local""#,
+        );
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory.");
+        let cli_args = CliArgs::new(Command::Config, None);
+
+        let (_, config) = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8."),
+            &cli_args,
+        )
+        .expect("`get_config` failed.");
+
+        assert_eq!(config.dockerfile, "from-cwd-local");
+    }
+
+    #[test]
     fn env_var_is_read() {
         let home_dir = tempdir().expect("Failed to create temporary directory.");
         // SAFETY:`set_var` is safe here because `cargo nextest` runs each test in its own process,
@@ -289,12 +314,39 @@ mod tests {
     }
 
     #[test]
-    fn env_var_overrides_cwd_config() {
+    fn cwd_local_config_overrides_cwd_config() {
         let home_dir = tempdir().expect("Failed to create temporary directory.");
         let cwd = tempdir().expect("Failed to create temporary directory.");
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
             r#"dockerfile = "from-cwd""#,
+        );
+        write_file(
+            &cwd.path().join(".agentcontainer/config.local.toml"),
+            r#"dockerfile = "from-cwd-local""#,
+        );
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory.");
+        let cli_args = CliArgs::new(Command::Config, None);
+
+        let (_, config) = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8."),
+            &cli_args,
+        )
+        .expect("`get_config` failed.");
+
+        assert_eq!(config.dockerfile, "from-cwd-local");
+    }
+
+    #[test]
+    fn env_var_overrides_cwd_local_config() {
+        let home_dir = tempdir().expect("Failed to create temporary directory.");
+        let cwd = tempdir().expect("Failed to create temporary directory.");
+        write_file(
+            &cwd.path().join(".agentcontainer/config.local.toml"),
+            r#"dockerfile = "from-cwd-local""#,
         );
         env::set_current_dir(cwd.path()).expect("Failed to set current directory.");
         // SAFETY:`set_var` is safe here because `cargo nextest` runs each test in its own process,
@@ -353,6 +405,10 @@ mod tests {
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
             r#"dockerfile = "from-cwd""#,
+        );
+        write_file(
+            &cwd.path().join(".agentcontainer/config.local.toml"),
+            r#"dockerfile = "from-cwd-local""#,
         );
         env::set_current_dir(cwd.path()).expect("Failed to set current directory.");
         // SAFETY:`set_var` is safe here because `cargo nextest` runs each test in its own process,
