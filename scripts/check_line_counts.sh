@@ -11,10 +11,16 @@ if [ $# -eq 0 ]; then
     done < <(find . \( -name "*.rs" -o -name "*.sh" \) -print0)
 fi
 
+errors=0
+
 for file in "$@"; do
     lines=$(wc -l < "$file" | tr -d ' ')
     if [ "$lines" -gt "$LINE_LIMIT" ]; then
         echo "Error: $file has $lines lines, exceeding the $LINE_LIMIT line limit"
-        exit 1
+        errors=$((errors + 1))
     fi
 done
+
+if [ "$errors" -gt 0 ]; then
+    exit 1
+fi

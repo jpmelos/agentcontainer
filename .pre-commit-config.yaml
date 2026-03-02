@@ -31,7 +31,7 @@ repos:
         language: system
         entry: ./scripts/check_line_counts.sh
         types_or:
-          - python
+          - rust
           - shell
 
   - repo: https://github.com/hukkin/mdformat
