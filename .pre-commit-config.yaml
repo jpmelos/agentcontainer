@@ -34,6 +34,13 @@ repos:
           - rust
           - shell
 
+      - name: Check file line lengths
+        id: check-line-lengths
+        language: system
+        entry: ./scripts/check_line_lengths.sh
+        types_or:
+          - rust
+
   - repo: https://github.com/hukkin/mdformat
     rev: 1.0.0
     hooks:
