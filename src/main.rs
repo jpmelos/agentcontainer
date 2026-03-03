@@ -2,16 +2,26 @@
 //!
 //! A standard way to declare and run agent containers for your projects.
 
+mod build;
 mod config;
+mod utils;
 
 use anyhow::{Context as _, Result};
+use build::BuildOutcome;
 use clap::Parser as _;
 use config::{CliArgs, Command};
 use std::env;
+use utils::clock::SystemClock;
+use utils::docker::RealDockerBackend;
+use utils::fs::RealFilesystem;
 
 #[expect(
     clippy::print_stdout,
     reason = "This is a CLI application that needs to print output to stdout."
+)]
+#[expect(
+    clippy::print_stderr,
+    reason = "This is a CLI application that needs to print errors to stderr."
 )]
 fn main() -> Result<()> {
     let home_dir = env::var("HOME").context("HOME environment variable is not set")?;
@@ -19,10 +29,28 @@ fn main() -> Result<()> {
 
     let (command_ref, config) = config::get_config(&home_dir, &cli_args)?;
 
-    match command_ref {
-        &Command::Config => {
+    match *command_ref {
+        Command::Config => {
             let output = toml::to_string_pretty(&config)?;
-            println!("{output}");
+            print!("{output}");
+        }
+        Command::Build => {
+            match build::build(&config, &RealDockerBackend, &RealFilesystem, &SystemClock) {
+                Ok(BuildOutcome::SkippedNoRebuild) => {
+                    eprintln!("Skipping rebuild (--no-rebuild).");
+                }
+                Ok(BuildOutcome::UpToDate) => {
+                    eprintln!("Image is up to date, skipping build.");
+                }
+                Ok(BuildOutcome::Built) => {}
+                Ok(BuildOutcome::UsingStaleAfterFailure { build_error }) => {
+                    eprintln!("Warning: build failed: {build_error}");
+                    eprintln!("Build failed but `--allow-stale` is set; using existing image.");
+                }
+                Err(error) => {
+                    return Err(error.into());
+                }
+            }
         }
     }
 
