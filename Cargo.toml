@@ -19,10 +19,13 @@ include = ["Cargo.lock", "Cargo.toml", "LICENSE", "README.md", "src/*"]
 
 [dependencies]
 anyhow = "1.0.102"
+chrono = "0.4.44"
 clap = { version = "4.5.60", features = ["derive"] }
 figment = { version = "0.10.19", features = ["toml", "env"] }
 serde = { version = "1.0.228", features = ["derive"] }
+thiserror = "2.0.18"
 toml = "1.0.3"
+whoami = "2.1.1"
 
 [dev-dependencies]
 assert_cmd = "2.1.2"

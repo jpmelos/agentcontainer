@@ -3,13 +3,13 @@
 #![allow(
     unused_crate_dependencies,
     reason = "Integration test crates inherit all development dependencies from `Cargo.toml`, even \
-    those not used in this file. This is a known Cargo limitation."
+        those not used in this file. This is a known Cargo limitation."
 )]
 
 #[cfg(test)]
 mod tests {
     use assert_cmd::{cargo_bin, prelude::OutputAssertExt as _};
-    use predicates::str::contains;
+    use predicates::str::{contains, diff};
     use std::{fs, path::Path, process::Command};
     use tempfile::tempdir;
 
@@ -26,13 +26,46 @@ mod tests {
         let home_dir = tempdir().expect("Failed to create temporary directory.");
         let cwd = tempdir().expect("Failed to create temporary directory.");
 
-        Command::new(cargo_bin!("agentcontainer"))
+        // Compute the expected `project_name` default the same way the production code does:
+        // the last component of the CWD path, as-is.
+        let expected_project_name = cwd
+            .path()
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("unknown")
+            .to_owned();
+
+        // Compute the expected `username` default the same way the production code does.
+        let expected_username = whoami::username().unwrap_or_else(|_| String::from("unknown"));
+
+        // Unset `AGENTCONTAINER_*` environment variables in case they are set in the environment,
+        // which would override the defaults we are testing.
+        let mut command = Command::new(cargo_bin!("agentcontainer"));
+        command
             .arg("config")
             .env("HOME", home_dir.path())
-            .current_dir(cwd.path())
-            .assert()
-            .success()
-            .stdout(contains(r#"dockerfile = ".agentcontainer/Dockerfile""#));
+            .env_remove("AGENTCONTAINER_DOCKERFILE")
+            .env_remove("AGENTCONTAINER_PROJECT_NAME")
+            .env_remove("AGENTCONTAINER_USERNAME")
+            .env_remove("AGENTCONTAINER_TARGET")
+            .env_remove("AGENTCONTAINER_ALLOW_STALE")
+            .env_remove("AGENTCONTAINER_FORCE_REBUILD")
+            .env_remove("AGENTCONTAINER_NO_BUILD_CACHE")
+            .env_remove("AGENTCONTAINER_NO_REBUILD")
+            .current_dir(cwd.path());
+
+        // `target` defaults to `None`, which is omitted entirely from TOML output.
+        let expected_output = format!(
+            "dockerfile = \".agentcontainer/Dockerfile\"\n\
+             project_name = \"{expected_project_name}\"\n\
+             username = \"{expected_username}\"\n\
+             allow_stale = false\n\
+             force_rebuild = false\n\
+             no_build_cache = false\n\
+             no_rebuild = false\n"
+        );
+
+        command.assert().success().stdout(diff(expected_output));
     }
 
     #[test]
