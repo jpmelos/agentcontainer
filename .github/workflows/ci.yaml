@@ -36,8 +36,10 @@ jobs:
           key: python-${{ env.PYTHON_VERSION }}-pre-commit-${{ env.PRECOMMIT_VERSION }}-${{ hashFiles('.pre-commit-config.yaml') }}
           restore-keys: python-${{ env.PYTHON_VERSION }}-pre-commit-${{ env.PRECOMMIT_VERSION }}
 
-      - name: Install cargo-nextest
-        run: cargo install --locked cargo-nextest
+      - name: Install Rust dependencies
+        run: |
+          cargo install --locked cargo-binstall
+          cargo binstall cargo-nextest cargo-deny cargo-machete
 
       - name: Compile tests
         run: cargo nextest run --no-run
