@@ -86,14 +86,21 @@ repos:
           - rust
         pass_filenames: false
 
-  - repo: https://github.com/EmbarkStudios/cargo-deny
-    rev: 0.18.9
-    hooks:
       - name: Check Cargo dependencies with `cargo deny`
         id: cargo-deny
+        entry: cargo deny --all-features check
+        language: rust
+        types:
+          - file
+          - toml
+        files: Cargo\.(toml|lock)
+        pass_filenames: false
 
-  - repo: https://github.com/bnjbvr/cargo-machete
-    rev: v0.9.1
-    hooks:
-      - id: cargo-machete
-        name: Drop unused Rust dependencies
+      - name: Drop unused Rust dependencies
+        id: cargo-machete
+        language: rust
+        entry: cargo machete
+        types_or:
+          - cargo
+          - cargo-lock
+        pass_filenames: false
