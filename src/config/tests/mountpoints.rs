@@ -137,6 +137,7 @@ fn cli_mountpoint_host_container_format_is_parsed_correctly() {
         None,
         None,
         None,
+        None,
         false,
         false,
         false,
@@ -178,6 +179,7 @@ fn cli_mountpoint_removal_format_sets_remove() {
         None,
         None,
         None,
+        None,
         false,
         false,
         false,
@@ -212,6 +214,7 @@ fn cli_mountpoint_overrides_toml_for_same_container_path() {
     env::set_current_dir(cwd.path()).expect("Failed to set current directory.");
     let cli_args = CliArgs::new(
         Command::Config,
+        None,
         None,
         None,
         None,
@@ -279,6 +282,7 @@ fn malformed_cli_mountpoint_no_colon_triggers_invalid_mountpoint_error() {
         None,
         None,
         None,
+        None,
         false,
         false,
         false,
@@ -307,6 +311,7 @@ fn malformed_cli_mountpoint_empty_host_triggers_invalid_mountpoint_error() {
     let home_dir = tempdir().expect("Failed to create temporary directory.");
     let cli_args = CliArgs::new(
         Command::Config,
+        None,
         None,
         None,
         None,
@@ -343,6 +348,7 @@ fn malformed_cli_mountpoint_empty_container_path_triggers_invalid_mountpoint_err
         None,
         None,
         None,
+        None,
         false,
         false,
         false,
@@ -375,6 +381,7 @@ fn cli_mountpoint_removal_with_colon_in_container_path_triggers_invalid_mountpoi
         None,
         None,
         None,
+        None,
         false,
         false,
         false,
@@ -403,6 +410,7 @@ fn cli_mountpoint_with_multiple_colons_triggers_invalid_mountpoint_error() {
     let home_dir = tempdir().expect("Failed to create temporary directory.");
     let cli_args = CliArgs::new(
         Command::Config,
+        None,
         None,
         None,
         None,

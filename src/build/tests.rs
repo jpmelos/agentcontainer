@@ -20,6 +20,7 @@ fn make_config(
 ) -> Config {
     Config {
         dockerfile: String::from(dockerfile),
+        build_context: String::from("."),
         project_name: String::from("myproject"),
         username: String::from("alice"),
         target: None,

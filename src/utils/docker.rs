@@ -92,7 +92,7 @@ impl DockerBackend for RealDockerBackend {
         }
 
         command.args(["-t", image_name]);
-        command.arg(".");
+        command.arg(&config.build_context);
 
         command.stdout(Stdio::inherit());
         command.stderr(Stdio::inherit());

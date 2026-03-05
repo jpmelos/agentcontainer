@@ -21,6 +21,11 @@ fn default_dockerfile() -> String {
     String::from(".agentcontainer/Dockerfile")
 }
 
+/// Default Docker build context directory.
+fn default_build_context() -> String {
+    String::from(".")
+}
+
 /// Default project name, derived from the last component of the current working directory.
 fn default_project_name() -> String {
     env::current_dir()
@@ -166,6 +171,10 @@ pub(crate) struct Config {
     #[serde(default = "default_dockerfile")]
     pub(crate) dockerfile: String,
 
+    /// Directory used as the Docker build context.
+    #[serde(default = "default_build_context")]
+    pub(crate) build_context: String,
+
     /// Project name used in Docker image tag.
     #[serde(default = "default_project_name")]
     pub(crate) project_name: String,
@@ -239,6 +248,10 @@ pub(crate) struct CliArgs {
     /// Path to the Dockerfile.
     #[arg(long, global = true)]
     dockerfile: Option<String>,
+
+    /// Directory used as the Docker build context.
+    #[arg(long, global = true)]
+    build_context: Option<String>,
 
     /// Name used in Docker image tag.
     #[arg(long, global = true)]
@@ -423,6 +436,7 @@ pub(crate) fn get_config<'cli_args>(
         cli_args,
         providers,
         dockerfile,
+        build_context,
         project_name,
         username,
         target

@@ -27,6 +27,7 @@ lowest to highest priority:
 | Key                     | Default                                            | Description                                                                                                       |
 | ----------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `dockerfile`            | `.agentcontainer/Dockerfile`                       | Path to the Dockerfile.                                                                                           |
+| `build_context`         | `.`                                                | Directory used as the Docker build context.                                                                       |
 | `project_name`          | Last component of the current directory, slugified | Name used in the Docker image tag.                                                                                |
 | `username`              | Current OS user (from `whoami`)                    | Username embedded in the image tag and passed as the `USERNAME` build argument.                                   |
 | `target`                | _(none)_                                           | Docker build `--target`. When set, appended to the image tag.                                                     |
@@ -113,6 +114,7 @@ fallback.
 
 ```toml
 dockerfile = ".agentcontainer/Dockerfile"
+build_context = "."
 project_name = "myproject"
 username = "alice"
 
@@ -132,6 +134,7 @@ TOML. For example:
 
 ```sh
 AGENTCONTAINER_DOCKERFILE=".agentcontainer/Dockerfile"
+AGENTCONTAINER_BUILD_CONTEXT="."
 AGENTCONTAINER_PROJECT_NAME="myproject"
 AGENTCONTAINER_USERNAME="alice"
 AGENTCONTAINER_MOUNTPOINTS='{"/workspace" = "/home/alice/projects/myproject"}'
@@ -155,9 +158,6 @@ Build the agent container Docker image.
 ```
 agentcontainer build
 ```
-
-**Note:** `agentcontainer build` must be run from the project root. The Docker
-build context is always the current working directory.
 
 The build is skipped if the image is already up to date. A rebuild is triggered
 when any of the following is true:
