@@ -5,6 +5,7 @@ use crate::utils::docker::DockerBackend;
 use crate::utils::fs::Filesystem;
 use anyhow::anyhow;
 use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone as _, Utc};
+use std::collections::HashMap;
 
 // ---------------------------------------------------------------------------
 // Helpers: minimal Config constructor.
@@ -26,6 +27,8 @@ fn make_config(
         force_rebuild,
         no_build_cache: false,
         no_rebuild,
+        mountpoints: HashMap::new(),
+        environment_variables: HashMap::new(),
     }
 }
 
