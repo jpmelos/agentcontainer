@@ -143,6 +143,7 @@ fn cli_env_var_key_equals_value_format_parses_correctly() {
         None,
         None,
         None,
+        None,
         false,
         false,
         false,
@@ -176,6 +177,7 @@ fn cli_env_var_key_equals_value_with_equals_in_value_parses_correctly() {
         None,
         None,
         None,
+        None,
         false,
         false,
         false,
@@ -204,6 +206,7 @@ fn cli_env_var_key_only_format_means_inherit() {
     let home_dir = tempdir().expect("Failed to create temporary directory.");
     let cli_args = CliArgs::new(
         Command::Config,
+        None,
         None,
         None,
         None,
@@ -249,6 +252,7 @@ fn cli_env_var_removal_format_sets_removed() {
         None,
         None,
         None,
+        None,
         false,
         false,
         false,
@@ -287,6 +291,7 @@ fn cli_env_var_overrides_toml_for_same_variable_name() {
         None,
         None,
         None,
+        None,
         false,
         false,
         false,
@@ -319,6 +324,7 @@ fn malformed_cli_env_var_empty_string_triggers_invalid_error() {
         None,
         None,
         None,
+        None,
         false,
         false,
         false,
@@ -347,6 +353,7 @@ fn cli_env_var_removal_with_equals_in_key_triggers_invalid_key_error() {
     let home_dir = tempdir().expect("Failed to create temporary directory.");
     let cli_args = CliArgs::new(
         Command::Config,
+        None,
         None,
         None,
         None,
@@ -386,6 +393,7 @@ mod invalid_environment_variable_keys {
             None,
             None,
             None,
+            None,
             false,
             false,
             false,
@@ -414,6 +422,7 @@ mod invalid_environment_variable_keys {
         let home_dir = tempdir().expect("Failed to create temporary directory.");
         let cli_args = CliArgs::new(
             Command::Config,
+            None,
             None,
             None,
             None,
@@ -450,6 +459,7 @@ mod invalid_environment_variable_keys {
             None,
             None,
             None,
+            None,
             false,
             false,
             false,
@@ -482,6 +492,7 @@ mod invalid_environment_variable_keys {
             None,
             None,
             None,
+            None,
             false,
             false,
             false,
@@ -510,6 +521,7 @@ mod invalid_environment_variable_keys {
         let home_dir = tempdir().expect("Failed to create temporary directory.");
         let cli_args = CliArgs::new(
             Command::Config,
+            None,
             None,
             None,
             None,
@@ -604,6 +616,7 @@ mod invalid_environment_variable_keys {
             None,
             None,
             None,
+            None,
             false,
             false,
             false,
@@ -632,6 +645,7 @@ mod invalid_environment_variable_keys {
         let home_dir = tempdir().expect("Failed to create temporary directory.");
         let cli_args = CliArgs::new(
             Command::Config,
+            None,
             None,
             None,
             None,

@@ -18,6 +18,7 @@ impl CliArgs {
     fn new(
         command: Command,
         dockerfile: Option<String>,
+        build_context: Option<String>,
         project_name: Option<String>,
         username: Option<String>,
         target: Option<String>,
@@ -30,6 +31,7 @@ impl CliArgs {
     ) -> Self {
         Self {
             dockerfile,
+            build_context,
             project_name,
             username,
             target,
@@ -60,6 +62,7 @@ fn write_file(path: &Path, content: &str) {
 fn default_cli_args(command: Command) -> CliArgs {
     CliArgs::new(
         command,
+        None,
         None,
         None,
         None,
@@ -212,6 +215,7 @@ mod configuration_sources_are_read {
             None,
             None,
             None,
+            None,
             false,
             false,
             false,
@@ -357,6 +361,7 @@ mod configuration_sources_priority_order {
             None,
             None,
             None,
+            None,
             false,
             false,
             false,
@@ -406,6 +411,7 @@ mod configuration_sources_priority_order {
         let cli_args = CliArgs::new(
             Command::Config,
             Some(String::from("from-cli")),
+            None,
             None,
             None,
             None,
@@ -505,6 +511,25 @@ mod default_values {
             config.dockerfile,
             String::from(".agentcontainer/Dockerfile")
         );
+    }
+
+    #[test]
+    fn default_build_context_is_dot() {
+        let home_dir = tempdir().expect("Failed to create temporary directory.");
+        let cwd = tempdir().expect("Failed to create temporary directory.");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory.");
+        let cli_args = default_cli_args(Command::Config);
+
+        let (_, config) = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8."),
+            &cli_args,
+        )
+        .expect("`get_config` failed.");
+
+        assert_eq!(config.build_context, ".");
     }
 
     #[test]
@@ -648,6 +673,7 @@ fn force_rebuild_and_no_rebuild_together_is_an_error() {
         None,
         None,
         None,
+        None,
         false,
         true, // force_rebuild
         false,
@@ -680,6 +706,7 @@ mod image_name {
         let cli_args = CliArgs::new(
             Command::Config,
             None,
+            None,
             Some(String::from("myproject")),
             Some(String::from("alice")),
             None,
@@ -708,6 +735,7 @@ mod image_name {
         let home_dir = tempdir().expect("Failed to create temporary directory.");
         let cli_args = CliArgs::new(
             Command::Config,
+            None,
             None,
             Some(String::from("myproject")),
             Some(String::from("alice")),
@@ -741,6 +769,7 @@ mod image_name {
         let cli_args = CliArgs::new(
             Command::Config,
             None,
+            None,
             Some(String::from("My Project")),
             Some(String::from("alice")),
             None,
@@ -772,6 +801,7 @@ mod image_name {
         let home_dir = tempdir().expect("Failed to create temporary directory.");
         let cli_args = CliArgs::new(
             Command::Config,
+            None,
             None,
             Some(String::from("myproject")),
             Some(String::from("Alice Smith")),
@@ -805,6 +835,7 @@ mod image_name {
         let cli_args = CliArgs::new(
             Command::Config,
             None,
+            None,
             Some(String::from("myproject")),
             Some(String::from("alice")),
             Some(String::from("My Target")),
@@ -836,6 +867,7 @@ mod image_name {
         let home_dir = tempdir().expect("Failed to create temporary directory.");
         let cli_args = CliArgs::new(
             Command::Config,
+            None,
             None,
             Some(String::from("myproject")),
             Some(String::from("@@@")),
@@ -869,6 +901,7 @@ mod image_name {
         let cli_args = CliArgs::new(
             Command::Config,
             None,
+            None,
             Some(String::from("@@@")),
             Some(String::from("alice")),
             None,
@@ -899,6 +932,7 @@ mod image_name {
         use super::super::Config;
         let config = Config {
             dockerfile: String::from(".agentcontainer/Dockerfile"),
+            build_context: String::from("."),
             project_name: String::from("myproject"),
             username: String::from("alice"),
             target: Some(String::from("@@@")),
@@ -922,6 +956,7 @@ fn invalid_target_with_no_alphanumeric_chars_is_an_error() {
     let home_dir = tempdir().expect("Failed to create temporary directory.");
     let cli_args = CliArgs::new(
         Command::Config,
+        None,
         None,
         Some(String::from("myproject")),
         Some(String::from("alice")),

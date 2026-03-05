@@ -45,6 +45,7 @@ mod tests {
             .arg("config")
             .env("HOME", home_dir.path())
             .env_remove("AGENTCONTAINER_DOCKERFILE")
+            .env_remove("AGENTCONTAINER_BUILD_CONTEXT")
             .env_remove("AGENTCONTAINER_PROJECT_NAME")
             .env_remove("AGENTCONTAINER_USERNAME")
             .env_remove("AGENTCONTAINER_TARGET")
@@ -58,6 +59,7 @@ mod tests {
 
         let expected_output = format!(
             "dockerfile = \".agentcontainer/Dockerfile\"\n\
+             build_context = \".\"\n\
              project_name = \"{expected_project_name}\"\n\
              username = \"{expected_username}\"\n"
         );
