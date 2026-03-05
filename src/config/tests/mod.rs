@@ -1,5 +1,8 @@
-use super::{CliArgs, Command, ConfigError, get_config};
-use std::{env, fs, path::Path};
+mod environment_variables;
+mod mountpoints;
+
+use super::{CliArgs, Command, ConfigError, EnvironmentVariableEntry, MountpointEntry, get_config};
+use std::{collections::HashMap, env, fs, path::Path};
 use tempfile::tempdir;
 
 impl CliArgs {
@@ -22,6 +25,8 @@ impl CliArgs {
         force_rebuild: bool,
         no_build_cache: bool,
         no_rebuild: bool,
+        mountpoints: Vec<String>,
+        environment_variables: Vec<String>,
     ) -> Self {
         Self {
             dockerfile,
@@ -32,6 +37,8 @@ impl CliArgs {
             force_rebuild,
             no_build_cache,
             no_rebuild,
+            mountpoints,
+            environment_variables,
             command,
         }
     }
@@ -51,7 +58,19 @@ fn write_file(path: &Path, content: &str) {
 
 /// Construct a default `CliArgs` for tests that don't care about CLI arguments.
 fn default_cli_args(command: Command) -> CliArgs {
-    CliArgs::new(command, None, None, None, None, false, false, false, false)
+    CliArgs::new(
+        command,
+        None,
+        None,
+        None,
+        None,
+        false,
+        false,
+        false,
+        false,
+        vec![],
+        vec![],
+    )
 }
 
 #[test]
@@ -197,6 +216,8 @@ mod configuration_sources_are_read {
             false,
             false,
             false,
+            vec![],
+            vec![],
         );
 
         let (_, config) = get_config(
@@ -340,6 +361,8 @@ mod configuration_sources_priority_order {
             false,
             false,
             false,
+            vec![],
+            vec![],
         );
 
         let (_, config) = get_config(
@@ -390,6 +413,8 @@ mod configuration_sources_priority_order {
             false,
             false,
             false,
+            vec![],
+            vec![],
         );
 
         let (_, config) = get_config(
@@ -627,6 +652,8 @@ fn force_rebuild_and_no_rebuild_together_is_an_error() {
         true, // force_rebuild
         false,
         true, // no_rebuild
+        vec![],
+        vec![],
     );
 
     let error = get_config(
@@ -660,6 +687,8 @@ mod image_name {
             false,
             false,
             false,
+            vec![],
+            vec![],
         );
 
         let (_, config) = get_config(
@@ -687,6 +716,8 @@ mod image_name {
             false,
             false,
             false,
+            vec![],
+            vec![],
         );
 
         let (_, config) = get_config(
@@ -717,6 +748,8 @@ mod image_name {
             false,
             false,
             false,
+            vec![],
+            vec![],
         );
 
         let (_, config) = get_config(
@@ -747,6 +780,8 @@ mod image_name {
             false,
             false,
             false,
+            vec![],
+            vec![],
         );
 
         let (_, config) = get_config(
@@ -777,6 +812,8 @@ mod image_name {
             false,
             false,
             false,
+            vec![],
+            vec![],
         );
 
         let (_, config) = get_config(
@@ -807,6 +844,8 @@ mod image_name {
             false,
             false,
             false,
+            vec![],
+            vec![],
         );
 
         let (_, config) = get_config(
@@ -837,6 +876,8 @@ mod image_name {
             false,
             false,
             false,
+            vec![],
+            vec![],
         );
 
         let (_, config) = get_config(
@@ -865,6 +906,8 @@ mod image_name {
             force_rebuild: false,
             no_build_cache: false,
             no_rebuild: false,
+            mountpoints: HashMap::new(),
+            environment_variables: HashMap::new(),
         };
 
         assert_eq!(
@@ -887,6 +930,8 @@ fn invalid_target_with_no_alphanumeric_chars_is_an_error() {
         false,
         false,
         false,
+        vec![],
+        vec![],
     );
 
     let error = get_config(

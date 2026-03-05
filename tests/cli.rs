@@ -52,17 +52,14 @@ mod tests {
             .env_remove("AGENTCONTAINER_FORCE_REBUILD")
             .env_remove("AGENTCONTAINER_NO_BUILD_CACHE")
             .env_remove("AGENTCONTAINER_NO_REBUILD")
+            .env_remove("AGENTCONTAINER_MOUNTPOINTS")
+            .env_remove("AGENTCONTAINER_ENVIRONMENT_VARIABLES")
             .current_dir(cwd.path());
 
-        // `target` defaults to `None`, which is omitted entirely from TOML output.
         let expected_output = format!(
             "dockerfile = \".agentcontainer/Dockerfile\"\n\
              project_name = \"{expected_project_name}\"\n\
-             username = \"{expected_username}\"\n\
-             allow_stale = false\n\
-             force_rebuild = false\n\
-             no_build_cache = false\n\
-             no_rebuild = false\n"
+             username = \"{expected_username}\"\n"
         );
 
         command.assert().success().stdout(diff(expected_output));
