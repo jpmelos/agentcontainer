@@ -10,7 +10,7 @@ use figment::{
     providers::{Env, Format as _, Serialized, Toml},
 };
 use merging_provider::MergingProvider;
-use serde::de::{Error as DeError, Unexpected, Visitor};
+use serde::de::{Error as DeError, Visitor};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Formatter, Result as FmtResult};
 use std::{collections::HashMap, env};
@@ -43,14 +43,19 @@ fn default_username() -> String {
     whoami::username().unwrap_or_else(|_| String::from("unknown"))
 }
 
-/// A mountpoint entry: either an active host path, or a removal sentinel.
+/// A mountpoint entry: an explicit host path, a same-path shorthand, or a removal sentinel.
 ///
-/// TOML/CLI user representation: a string = host path; `false` = remove. `true` is rejected by
-/// the custom deserializer.
+/// In TOML and environment variables: a string = host path; `true` = mount at the same path as
+/// the container path key; `false` = remove.
+///
+/// On the CLI: `"/host:/container"` = explicit mount; `"/path"` (no colon) = same-path shorthand;
+/// `"!/container"` = remove.
 #[derive(Debug, Clone)]
 pub(crate) enum MountpointEntry {
     /// The host path to mount at the container path key.
     Active(String),
+    /// Mount the container path key at the same path on the host.
+    SamePath,
     /// Removal sentinel.
     Remove,
 }
@@ -59,6 +64,7 @@ impl Serialize for MountpointEntry {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match *self {
             Self::Active(ref host_path) => serializer.serialize_str(host_path),
+            Self::SamePath => serializer.serialize_bool(true),
             Self::Remove => serializer.serialize_bool(false),
         }
     }
@@ -72,7 +78,9 @@ impl<'de> Deserialize<'de> for MountpointEntry {
             type Value = MountpointEntry;
 
             fn expecting(&self, formatter: &mut Formatter<'_>) -> FmtResult {
-                formatter.write_str("a host path string or `false` as a removal sentinel")
+                formatter.write_str(
+                    "a host path string, `true` for same-path mount, or `false` to remove",
+                )
             }
 
             fn visit_str<E: DeError>(self, v: &str) -> Result<Self::Value, E> {
@@ -85,10 +93,7 @@ impl<'de> Deserialize<'de> for MountpointEntry {
 
             fn visit_bool<E: DeError>(self, v: bool) -> Result<Self::Value, E> {
                 if v {
-                    Err(E::invalid_value(
-                        Unexpected::Bool(true),
-                        &"a host path string or `false` as a removal sentinel",
-                    ))
+                    Ok(MountpointEntry::SamePath)
                 } else {
                     Ok(MountpointEntry::Remove)
                 }
@@ -101,8 +106,11 @@ impl<'de> Deserialize<'de> for MountpointEntry {
 
 /// An environment variable entry.
 ///
-/// TOML/CLI user representation: a string = literal value; `true` = inherit from host; `false` =
-/// remove / suppress.
+/// In TOML and environment variables: a string = literal value; `true` = inherit from host;
+/// `false` = remove / suppress.
+///
+/// On the CLI: `"KEY=value"` = literal value; `"KEY"` (no `=`) = inherit from host; `"!KEY"` =
+/// remove.
 #[derive(Debug, Clone)]
 pub(crate) enum EnvironmentVariableEntry {
     /// A literal value to pass into the container.
@@ -303,7 +311,7 @@ pub(crate) struct CliArgs {
     #[arg(long, global = true)]
     no_rebuild: bool,
 
-    /// Mountpoint in "host:container" format. Repeatable. Prefix with "!" to remove.
+    /// Mountpoint as "host:container", "/path" (same path), or "!/path" (remove). Repeatable.
     #[arg(long = "mountpoint", global = true)]
     mountpoints: Vec<String>,
 
@@ -353,12 +361,22 @@ pub(crate) enum ConfigError {
         /// The raw target value that failed slugification.
         target: String,
     },
-    /// A mountpoint value could not be parsed (bad CLI format, or `true` used as a value in
-    /// TOML/env).
-    #[error("Invalid mountpoint value {value:?}: expected \"/host:/container\" or \"!/container\"")]
+    /// A mountpoint value could not be parsed (bad CLI format).
+    #[error(
+        "Invalid mountpoint value {value:?}: expected \"/host:/container\", \"/path\", or \
+         \"!/container\""
+    )]
     InvalidMountpoint {
         /// The raw value that failed parsing.
         value: String,
+    },
+    /// A mountpoint container path is not absolute.
+    #[error(
+        "Invalid mountpoint path {path:?}: container paths must be absolute (start with \"/\")"
+    )]
+    InvalidMountpointPath {
+        /// The container path that is not absolute.
+        path: String,
     },
     /// An environment variable CLI argument could not be parsed.
     #[error(
@@ -499,21 +517,22 @@ pub(crate) fn get_config<'cli_args>(
 ///
 /// Accepted formats:
 /// - `"/host:/container"` → `("/container", Active("/host"))`
+/// - `"/path"` (no colon) → `("/path", SamePath)` — mount at the same path in the container.
 /// - `"!/container"` → `("/container", Remove)`
 fn parse_cli_mountpoints(
     raw_mountpoints: &[String],
 ) -> Result<HashMap<String, MountpointEntry>, ConfigError> {
     let mut mountpoints = HashMap::new();
     for raw in raw_mountpoints {
+        if raw.is_empty() {
+            return Err(ConfigError::InvalidMountpoint { value: raw.clone() });
+        }
         if let Some(container_path) = raw.strip_prefix('!') {
             if container_path.is_empty() || container_path.contains(':') {
                 return Err(ConfigError::InvalidMountpoint { value: raw.clone() });
             }
             mountpoints.insert(String::from(container_path), MountpointEntry::Remove);
-        } else {
-            let Some((host_path, container_path)) = raw.rsplit_once(':') else {
-                return Err(ConfigError::InvalidMountpoint { value: raw.clone() });
-            };
+        } else if let Some((host_path, container_path)) = raw.rsplit_once(':') {
             if host_path.is_empty() || host_path.contains(':') || container_path.is_empty() {
                 return Err(ConfigError::InvalidMountpoint { value: raw.clone() });
             }
@@ -521,6 +540,8 @@ fn parse_cli_mountpoints(
                 String::from(container_path),
                 MountpointEntry::Active(String::from(host_path)),
             );
+        } else {
+            mountpoints.insert(raw.clone(), MountpointEntry::SamePath);
         }
     }
     Ok(mountpoints)
@@ -603,6 +624,14 @@ fn validate_config(config: &Config) -> Result<(), ConfigError> {
         return Err(ConfigError::InvalidTarget {
             target: target.clone(),
         });
+    }
+
+    for container_path in config.mountpoints.keys() {
+        if !container_path.starts_with('/') {
+            return Err(ConfigError::InvalidMountpointPath {
+                path: container_path.clone(),
+            });
+        }
     }
 
     for key in config.environment_variables.keys() {

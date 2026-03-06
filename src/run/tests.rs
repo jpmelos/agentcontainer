@@ -152,6 +152,20 @@ mod build_docker_run_args {
     }
 
     #[test]
+    fn includes_same_path_mountpoint() {
+        let mut config = make_config();
+        config
+            .mountpoints
+            .insert(String::from("/shared/data"), MountpointEntry::SamePath);
+        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42);
+
+        assert!(
+            has_flag_pair(&args, "-v", "/shared/data:/shared/data"),
+            "Same-path mountpoint not found in args: {args:?}"
+        );
+    }
+
+    #[test]
     fn includes_env_var_with_value() {
         let mut config = make_config();
         config.environment_variables.insert(

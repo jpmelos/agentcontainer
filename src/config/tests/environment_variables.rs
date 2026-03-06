@@ -22,363 +22,408 @@ fn default_environment_variables_is_empty() {
     assert!(config.environment_variables.is_empty());
 }
 
-#[test]
-fn single_toml_file_with_env_vars_is_read_correctly() {
-    let home_dir = tempdir().expect("Failed to create temporary directory.");
-    let cwd = tempdir().expect("Failed to create temporary directory.");
-    write_file(
-        &cwd.path().join(".agentcontainer/config.toml"),
-        r#"
-        [environment_variables]
-        EDITOR = "nvim"
-        API_KEY = true
-        OLD_VAR = false
-        "#,
-    );
-    env::set_current_dir(cwd.path()).expect("Failed to set current directory.");
-    let cli_args = default_cli_args(Command::Config);
+mod parsing_toml {
+    use super::*;
 
-    let (_, config) = get_config(
-        home_dir
-            .path()
-            .to_str()
-            .expect("Temporary directory path is not valid UTF-8."),
-        &cli_args,
-    )
-    .expect("`get_config` failed.");
+    #[test]
+    fn single_toml_file_with_env_vars_is_read_correctly() {
+        let home_dir = tempdir().expect("Failed to create temporary directory.");
+        let cwd = tempdir().expect("Failed to create temporary directory.");
+        write_file(
+            &cwd.path().join(".agentcontainer/config.toml"),
+            r#"
+            [environment_variables]
+            EDITOR = "nvim"
+            API_KEY = true
+            OLD_VAR = false
+            "#,
+        );
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory.");
+        let cli_args = default_cli_args(Command::Config);
 
-    assert!(matches!(
-        config.environment_variables.get("EDITOR"),
-        Some(EnvironmentVariableEntry::Value(value)) if value == "nvim"
-    ));
-    assert!(matches!(
-        config.environment_variables.get("API_KEY"),
-        Some(EnvironmentVariableEntry::Inherit)
-    ));
-    assert!(!config.environment_variables.contains_key("OLD_VAR"));
+        let (_, config) = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8."),
+            &cli_args,
+        )
+        .expect("`get_config` failed.");
+
+        assert!(matches!(
+            config.environment_variables.get("EDITOR"),
+            Some(EnvironmentVariableEntry::Value(value)) if value == "nvim"
+        ));
+        assert!(matches!(
+            config.environment_variables.get("API_KEY"),
+            Some(EnvironmentVariableEntry::Inherit)
+        ));
+        assert!(!config.environment_variables.contains_key("OLD_VAR"));
+    }
+
+    #[test]
+    fn two_toml_files_with_different_variable_names_are_unioned() {
+        let home_dir = tempdir().expect("Failed to create temporary directory.");
+        let cwd = tempdir().expect("Failed to create temporary directory.");
+        write_file(
+            &cwd.path().join(".agentcontainer/config.toml"),
+            r#"
+            [environment_variables]
+            VAR1 = "val1"
+            "#,
+        );
+        write_file(
+            &cwd.path().join(".agentcontainer/config.local.toml"),
+            r#"
+            [environment_variables]
+            VAR2 = "val2"
+            "#,
+        );
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory.");
+        let cli_args = default_cli_args(Command::Config);
+
+        let (_, config) = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8."),
+            &cli_args,
+        )
+        .expect("`get_config` failed.");
+
+        assert!(matches!(
+            config.environment_variables.get("VAR1"),
+            Some(EnvironmentVariableEntry::Value(value)) if value == "val1"
+        ));
+        assert!(matches!(
+            config.environment_variables.get("VAR2"),
+            Some(EnvironmentVariableEntry::Value(value)) if value == "val2"
+        ));
+    }
+
+    #[test]
+    fn two_toml_files_with_same_variable_name_later_wins() {
+        let home_dir = tempdir().expect("Failed to create temporary directory.");
+        let cwd = tempdir().expect("Failed to create temporary directory.");
+        write_file(
+            &cwd.path().join(".agentcontainer/config.toml"),
+            r#"
+            [environment_variables]
+            EDITOR = "vim"
+            "#,
+        );
+        write_file(
+            &cwd.path().join(".agentcontainer/config.local.toml"),
+            r#"
+            [environment_variables]
+            EDITOR = "nvim"
+            "#,
+        );
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory.");
+        let cli_args = default_cli_args(Command::Config);
+
+        let (_, config) = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8."),
+            &cli_args,
+        )
+        .expect("`get_config` failed.");
+
+        assert!(matches!(
+            config.environment_variables.get("EDITOR"),
+            Some(EnvironmentVariableEntry::Value(value)) if value == "nvim"
+        ));
+    }
 }
 
-#[test]
-fn two_toml_files_with_different_variable_names_are_unioned() {
-    let home_dir = tempdir().expect("Failed to create temporary directory.");
-    let cwd = tempdir().expect("Failed to create temporary directory.");
-    write_file(
-        &cwd.path().join(".agentcontainer/config.toml"),
-        r#"
-        [environment_variables]
-        VAR1 = "val1"
-        "#,
-    );
-    write_file(
-        &cwd.path().join(".agentcontainer/config.local.toml"),
-        r#"
-        [environment_variables]
-        VAR2 = "val2"
-        "#,
-    );
-    env::set_current_dir(cwd.path()).expect("Failed to set current directory.");
-    let cli_args = default_cli_args(Command::Config);
+mod parsing_env_var {
+    use super::*;
 
-    let (_, config) = get_config(
-        home_dir
-            .path()
-            .to_str()
-            .expect("Temporary directory path is not valid UTF-8."),
-        &cli_args,
-    )
-    .expect("`get_config` failed.");
+    #[test]
+    fn env_var_inherit_format_is_parsed_correctly() {
+        let home_dir = tempdir().expect("Failed to create temporary directory.");
+        // SAFETY: `set_var` is safe here because `cargo nextest` runs each test in its own process,
+        // so there are no other threads to race with.
+        unsafe {
+            env::set_var("AGENTCONTAINER_ENVIRONMENT_VARIABLES", "{MY_VAR = true}");
+        };
+        let cli_args = default_cli_args(Command::Config);
 
-    assert!(matches!(
-        config.environment_variables.get("VAR1"),
-        Some(EnvironmentVariableEntry::Value(value)) if value == "val1"
-    ));
-    assert!(matches!(
-        config.environment_variables.get("VAR2"),
-        Some(EnvironmentVariableEntry::Value(value)) if value == "val2"
-    ));
+        let (_, config) = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8."),
+            &cli_args,
+        )
+        .expect("`get_config` failed.");
+
+        assert!(
+            matches!(
+                config.environment_variables.get("MY_VAR"),
+                Some(EnvironmentVariableEntry::Inherit)
+            ),
+            "Expected `Inherit`, got: {:?}",
+            config.environment_variables.get("MY_VAR")
+        );
+    }
+
+    #[test]
+    fn malformed_cli_env_var_empty_string_triggers_invalid_error() {
+        let home_dir = tempdir().expect("Failed to create temporary directory.");
+        let cli_args = CliArgs::new(
+            Command::Config,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            false,
+            false,
+            false,
+            vec![],
+            vec![String::new()],
+        );
+
+        let error = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8."),
+            &cli_args,
+        )
+        .expect_err("Expected `get_config` to fail with an empty environment variable argument.");
+
+        assert!(
+            matches!(error, ConfigError::InvalidEnvironmentVariable { .. }),
+            "Expected `ConfigError::InvalidEnvironmentVariable`, got: {error:?}"
+        );
+    }
+
+    #[test]
+    fn cli_env_var_removal_with_equals_in_key_triggers_invalid_key_error() {
+        let home_dir = tempdir().expect("Failed to create temporary directory.");
+        let cli_args = CliArgs::new(
+            Command::Config,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            false,
+            false,
+            false,
+            vec![],
+            vec![String::from("!KEY=extra")],
+        );
+
+        let error = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8."),
+            &cli_args,
+        )
+        .expect_err("Expected `get_config` to fail with an equals sign in the removal key.");
+
+        assert!(
+            matches!(error, ConfigError::InvalidEnvironmentVariableKey { .. }),
+            "Expected `ConfigError::InvalidEnvironmentVariableKey`, got: {error:?}"
+        );
+    }
 }
 
-#[test]
-fn two_toml_files_with_same_variable_name_later_wins() {
-    let home_dir = tempdir().expect("Failed to create temporary directory.");
-    let cwd = tempdir().expect("Failed to create temporary directory.");
-    write_file(
-        &cwd.path().join(".agentcontainer/config.toml"),
-        r#"
-        [environment_variables]
-        EDITOR = "vim"
-        "#,
-    );
-    write_file(
-        &cwd.path().join(".agentcontainer/config.local.toml"),
-        r#"
-        [environment_variables]
-        EDITOR = "nvim"
-        "#,
-    );
-    env::set_current_dir(cwd.path()).expect("Failed to set current directory.");
-    let cli_args = default_cli_args(Command::Config);
+mod parsing_cli_args {
+    use super::*;
 
-    let (_, config) = get_config(
-        home_dir
-            .path()
-            .to_str()
-            .expect("Temporary directory path is not valid UTF-8."),
-        &cli_args,
-    )
-    .expect("`get_config` failed.");
+    #[test]
+    fn cli_env_var_key_equals_value_format_parses_correctly() {
+        let home_dir = tempdir().expect("Failed to create temporary directory.");
+        let cli_args = CliArgs::new(
+            Command::Config,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            false,
+            false,
+            false,
+            vec![],
+            vec![String::from("KEY=val")],
+        );
 
-    assert!(matches!(
-        config.environment_variables.get("EDITOR"),
-        Some(EnvironmentVariableEntry::Value(value)) if value == "nvim"
-    ));
+        let (_, config) = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8."),
+            &cli_args,
+        )
+        .expect("`get_config` failed.");
+
+        assert!(matches!(
+            config.environment_variables.get("KEY"),
+            Some(EnvironmentVariableEntry::Value(value)) if value == "val"
+        ));
+    }
+
+    #[test]
+    fn cli_env_var_key_equals_value_with_equals_in_value_parses_correctly() {
+        // Split is on the first `=` only; anything after is part of the value.
+        let home_dir = tempdir().expect("Failed to create temporary directory.");
+        let cli_args = CliArgs::new(
+            Command::Config,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            false,
+            false,
+            false,
+            vec![],
+            vec![String::from("KEY=value=another")],
+        );
+
+        let (_, config) = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8."),
+            &cli_args,
+        )
+        .expect("`get_config` failed.");
+
+        assert!(matches!(
+            config.environment_variables.get("KEY"),
+            Some(EnvironmentVariableEntry::Value(value)) if value == "value=another"
+        ));
+    }
+
+    #[test]
+    fn cli_env_var_key_only_format_means_inherit() {
+        let home_dir = tempdir().expect("Failed to create temporary directory.");
+        let cli_args = CliArgs::new(
+            Command::Config,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            false,
+            false,
+            false,
+            vec![],
+            vec![String::from("KEY")],
+        );
+
+        let (_, config) = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8."),
+            &cli_args,
+        )
+        .expect("`get_config` failed.");
+
+        assert!(matches!(
+            config.environment_variables.get("KEY"),
+            Some(EnvironmentVariableEntry::Inherit)
+        ));
+    }
+
+    #[test]
+    fn cli_env_var_removal_format_sets_removed() {
+        let home_dir = tempdir().expect("Failed to create temporary directory.");
+        let cwd = tempdir().expect("Failed to create temporary directory.");
+        write_file(
+            &cwd.path().join(".agentcontainer/config.toml"),
+            r#"
+            [environment_variables]
+            EDITOR = "nvim"
+            "#,
+        );
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory.");
+        let cli_args = CliArgs::new(
+            Command::Config,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            false,
+            false,
+            false,
+            vec![],
+            vec![String::from("!EDITOR")],
+        );
+
+        let (_, config) = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8."),
+            &cli_args,
+        )
+        .expect("`get_config` failed.");
+
+        assert!(!config.environment_variables.contains_key("EDITOR"));
+    }
 }
 
-#[test]
-fn cli_env_var_key_equals_value_format_parses_correctly() {
-    let home_dir = tempdir().expect("Failed to create temporary directory.");
-    let cli_args = CliArgs::new(
-        Command::Config,
-        None,
-        None,
-        None,
-        None,
-        None,
-        false,
-        false,
-        false,
-        false,
-        vec![],
-        vec![String::from("KEY=val")],
-    );
+mod priority {
+    use super::*;
 
-    let (_, config) = get_config(
-        home_dir
-            .path()
-            .to_str()
-            .expect("Temporary directory path is not valid UTF-8."),
-        &cli_args,
-    )
-    .expect("`get_config` failed.");
+    #[test]
+    fn cli_env_var_overrides_toml_for_same_variable_name() {
+        let home_dir = tempdir().expect("Failed to create temporary directory.");
+        let cwd = tempdir().expect("Failed to create temporary directory.");
+        write_file(
+            &cwd.path().join(".agentcontainer/config.toml"),
+            r#"
+            [environment_variables]
+            EDITOR = "vim"
+            "#,
+        );
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory.");
+        let cli_args = CliArgs::new(
+            Command::Config,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            false,
+            false,
+            false,
+            vec![],
+            vec![String::from("EDITOR=nvim")],
+        );
 
-    assert!(matches!(
-        config.environment_variables.get("KEY"),
-        Some(EnvironmentVariableEntry::Value(value)) if value == "val"
-    ));
-}
+        let (_, config) = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8."),
+            &cli_args,
+        )
+        .expect("`get_config` failed.");
 
-#[test]
-fn cli_env_var_key_equals_value_with_equals_in_value_parses_correctly() {
-    // Split is on the first `=` only; anything after is part of the value.
-    let home_dir = tempdir().expect("Failed to create temporary directory.");
-    let cli_args = CliArgs::new(
-        Command::Config,
-        None,
-        None,
-        None,
-        None,
-        None,
-        false,
-        false,
-        false,
-        false,
-        vec![],
-        vec![String::from("KEY=value=another")],
-    );
-
-    let (_, config) = get_config(
-        home_dir
-            .path()
-            .to_str()
-            .expect("Temporary directory path is not valid UTF-8."),
-        &cli_args,
-    )
-    .expect("`get_config` failed.");
-
-    assert!(matches!(
-        config.environment_variables.get("KEY"),
-        Some(EnvironmentVariableEntry::Value(value)) if value == "value=another"
-    ));
-}
-
-#[test]
-fn cli_env_var_key_only_format_means_inherit() {
-    let home_dir = tempdir().expect("Failed to create temporary directory.");
-    let cli_args = CliArgs::new(
-        Command::Config,
-        None,
-        None,
-        None,
-        None,
-        None,
-        false,
-        false,
-        false,
-        false,
-        vec![],
-        vec![String::from("KEY")],
-    );
-
-    let (_, config) = get_config(
-        home_dir
-            .path()
-            .to_str()
-            .expect("Temporary directory path is not valid UTF-8."),
-        &cli_args,
-    )
-    .expect("`get_config` failed.");
-
-    assert!(matches!(
-        config.environment_variables.get("KEY"),
-        Some(EnvironmentVariableEntry::Inherit)
-    ));
-}
-
-#[test]
-fn cli_env_var_removal_format_sets_removed() {
-    let home_dir = tempdir().expect("Failed to create temporary directory.");
-    let cwd = tempdir().expect("Failed to create temporary directory.");
-    write_file(
-        &cwd.path().join(".agentcontainer/config.toml"),
-        r#"
-        [environment_variables]
-        EDITOR = "nvim"
-        "#,
-    );
-    env::set_current_dir(cwd.path()).expect("Failed to set current directory.");
-    let cli_args = CliArgs::new(
-        Command::Config,
-        None,
-        None,
-        None,
-        None,
-        None,
-        false,
-        false,
-        false,
-        false,
-        vec![],
-        vec![String::from("!EDITOR")],
-    );
-
-    let (_, config) = get_config(
-        home_dir
-            .path()
-            .to_str()
-            .expect("Temporary directory path is not valid UTF-8."),
-        &cli_args,
-    )
-    .expect("`get_config` failed.");
-
-    assert!(!config.environment_variables.contains_key("EDITOR"));
-}
-
-#[test]
-fn cli_env_var_overrides_toml_for_same_variable_name() {
-    let home_dir = tempdir().expect("Failed to create temporary directory.");
-    let cwd = tempdir().expect("Failed to create temporary directory.");
-    write_file(
-        &cwd.path().join(".agentcontainer/config.toml"),
-        r#"
-        [environment_variables]
-        EDITOR = "vim"
-        "#,
-    );
-    env::set_current_dir(cwd.path()).expect("Failed to set current directory.");
-    let cli_args = CliArgs::new(
-        Command::Config,
-        None,
-        None,
-        None,
-        None,
-        None,
-        false,
-        false,
-        false,
-        false,
-        vec![],
-        vec![String::from("EDITOR=nvim")],
-    );
-
-    let (_, config) = get_config(
-        home_dir
-            .path()
-            .to_str()
-            .expect("Temporary directory path is not valid UTF-8."),
-        &cli_args,
-    )
-    .expect("`get_config` failed.");
-
-    assert!(matches!(
-        config.environment_variables.get("EDITOR"),
-        Some(EnvironmentVariableEntry::Value(value)) if value == "nvim"
-    ));
-}
-
-#[test]
-fn malformed_cli_env_var_empty_string_triggers_invalid_error() {
-    let home_dir = tempdir().expect("Failed to create temporary directory.");
-    let cli_args = CliArgs::new(
-        Command::Config,
-        None,
-        None,
-        None,
-        None,
-        None,
-        false,
-        false,
-        false,
-        false,
-        vec![],
-        vec![String::new()],
-    );
-
-    let error = get_config(
-        home_dir
-            .path()
-            .to_str()
-            .expect("Temporary directory path is not valid UTF-8."),
-        &cli_args,
-    )
-    .expect_err("Expected `get_config` to fail with an empty environment variable argument.");
-
-    assert!(
-        matches!(error, ConfigError::InvalidEnvironmentVariable { .. }),
-        "Expected `ConfigError::InvalidEnvironmentVariable`, got: {error:?}"
-    );
-}
-
-#[test]
-fn cli_env_var_removal_with_equals_in_key_triggers_invalid_key_error() {
-    let home_dir = tempdir().expect("Failed to create temporary directory.");
-    let cli_args = CliArgs::new(
-        Command::Config,
-        None,
-        None,
-        None,
-        None,
-        None,
-        false,
-        false,
-        false,
-        false,
-        vec![],
-        vec![String::from("!KEY=extra")],
-    );
-
-    let error = get_config(
-        home_dir
-            .path()
-            .to_str()
-            .expect("Temporary directory path is not valid UTF-8."),
-        &cli_args,
-    )
-    .expect_err("Expected `get_config` to fail with an equals sign in the removal key.");
-
-    assert!(
-        matches!(error, ConfigError::InvalidEnvironmentVariableKey { .. }),
-        "Expected `ConfigError::InvalidEnvironmentVariableKey`, got: {error:?}"
-    );
+        assert!(matches!(
+            config.environment_variables.get("EDITOR"),
+            Some(EnvironmentVariableEntry::Value(value)) if value == "nvim"
+        ));
+    }
 }
 
 mod invalid_environment_variable_keys {

@@ -64,9 +64,20 @@ fn build_docker_run_args(
 
     // Config mountpoints.
     for (container_path, entry) in &config.mountpoints {
-        if let MountpointEntry::Active(ref host_path) = *entry {
-            args.push(String::from("-v"));
-            args.push(format!("{host_path}:{container_path}"));
+        match *entry {
+            MountpointEntry::Active(ref host_path) => {
+                args.push(String::from("-v"));
+                args.push(format!("{host_path}:{container_path}"));
+            }
+            MountpointEntry::SamePath => {
+                args.push(String::from("-v"));
+                args.push(format!("{container_path}:{container_path}"));
+            }
+            MountpointEntry::Remove => {
+                unreachable!(
+                    "`Remove` entries are stripped by `clean_config` before `run` is called."
+                )
+            }
         }
     }
 

@@ -43,13 +43,18 @@ lowest to highest priority:
 ### Mountpoints
 
 The `mountpoints` table maps container paths to host paths. In TOML, each key
-is a container path and the value is either a host path string or `false` to
-remove a mountpoint inherited from a lower-priority config source.
+is a container path and the value is either:
+
+- A string: an explicit host path to mount at the container path.
+- `true`: mount at the same path in the container as on the host (the key is
+  used as both host and container path).
+- `false`: remove a mountpoint inherited from a lower-priority config source.
 
 ```toml
 [mountpoints]
 "/workspace" = "/home/alice/projects/myproject"
 "/data" = "/mnt/shared-data"
+"/home/alice/.ssh" = true                       # mount at the same path inside the container
 "/unwanted" = false                             # suppress a mountpoint defined in a lower-priority source
 ```
 
@@ -58,6 +63,9 @@ On the CLI, use `--mountpoint` (repeatable):
 ```sh
 # Mount a host path into the container.
 agentcontainer build --mountpoint /home/alice/projects/myproject:/workspace
+
+# Mount at the same path inside the container (same-path shorthand).
+agentcontainer build --mountpoint /home/alice/.ssh
 
 # Remove a mountpoint inherited from config files.
 agentcontainer build --mountpoint '!/unwanted'
@@ -134,6 +142,7 @@ username = "alice"
 
 [mountpoints]
 "/workspace" = "/home/alice/projects/myproject"
+"/home/alice/.ssh" = true  # same path on host and in container
 
 [environment_variables]
 EDITOR = "nvim"
@@ -151,7 +160,7 @@ AGENTCONTAINER_DOCKERFILE=".agentcontainer/Dockerfile"
 AGENTCONTAINER_BUILD_CONTEXT="."
 AGENTCONTAINER_PROJECT_NAME="myproject"
 AGENTCONTAINER_USERNAME="alice"
-AGENTCONTAINER_MOUNTPOINTS='{"/workspace" = "/home/alice/projects/myproject"}'
+AGENTCONTAINER_MOUNTPOINTS='{"/workspace" = "/home/alice/projects/myproject", "/home/alice/.ssh" = true}'
 AGENTCONTAINER_ENVIRONMENT_VARIABLES='{EDITOR = "nvim", SSH_AUTH_SOCK = true}'
 ```
 
