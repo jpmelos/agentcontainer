@@ -3,7 +3,7 @@
 
 mod merging_provider;
 
-use crate::utils::slugify::slugify_or_unknown;
+use crate::utils::slugify::slugify;
 use clap::{Parser, Subcommand};
 use figment::{
     Figment,
@@ -216,23 +216,45 @@ impl Config {
     /// Return the Docker image name for this configuration.
     ///
     /// The `username`, `project_name`, and `target` fields are slugified before being embedded in
-    /// the tag so that the result is always a valid Docker image name. The validity of `target` is
-    /// guaranteed by `get_config`, which rejects any value that contains no alphanumeric
-    /// characters before returning a `Config`.
-    pub(crate) fn image_name(&self) -> String {
-        let slugified_username = slugify_or_unknown(&self.username);
-        let slugified_project_name = slugify_or_unknown(&self.project_name);
+    /// the tag so that the result is always a valid Docker image name. The validity of `username`,
+    /// `project_name`, and `target` is guaranteed by `get_config`, which rejects any value whose
+    /// slug is empty before returning a `Config`.
+    pub(crate) fn get_image_name(&self) -> String {
+        let slugified_username = slugify(&self.username);
+        let slugified_project_name = slugify(&self.project_name);
 
         self.target.as_ref().map_or_else(
-            || format!("agentcontainer-{slugified_username}-{slugified_project_name}:latest"),
+            || format!("agentcontainer_{slugified_username}_{slugified_project_name}:latest"),
             |target| {
-                let slugified_target = slugify_or_unknown(target);
+                let slugified_target = slugify(target);
                 format!(
-                    "agentcontainer-{slugified_username}-{slugified_project_name}\
-                    -{slugified_target}:latest"
+                    "agentcontainer_{slugified_username}_{slugified_project_name}\
+                    _{slugified_target}:latest"
                 )
             },
         )
+    }
+
+    /// Generate a container name from the project name and a random suffix.
+    ///
+    /// The project name is slugified then truncated to 41 characters (with any trailing underscore
+    /// removed after truncation). The final format is `agentcontainer_{name}_{suffix}`, which is
+    /// at most 63 characters long, the limit for a container name.
+    pub(crate) fn get_container_name(&self, random_suffix: u32) -> String {
+        let slugified = slugify(&self.project_name);
+        // `slugify` only produces ASCII characters (lowercase letters, digits, underscores), so
+        // slicing at a byte offset is always on a character boundary.
+        #[expect(
+            clippy::string_slice,
+            reason = "The slugified output is ASCII-only, so byte slicing is safe."
+        )]
+        let mut truncated: &str = if slugified.len() > 41 {
+            &slugified[..41]
+        } else {
+            &slugified
+        };
+        truncated = truncated.trim_end_matches('_');
+        format!("agentcontainer_{truncated}_{random_suffix}")
     }
 }
 
@@ -300,6 +322,8 @@ pub(crate) enum Command {
     Config,
     /// Build the agent container image.
     Build,
+    /// Run the agent container.
+    Run,
 }
 
 /// Errors that can be returned from `get_config`.
@@ -311,6 +335,18 @@ pub(crate) enum ConfigError {
     /// Figment failed to extract the configuration.
     #[error("Failed to load configuration: {0}")]
     Extract(Box<figment::Error>),
+    /// The username contains no alphanumeric characters and cannot produce a valid slug.
+    #[error("Invalid `username` value {username:?}: contains no alphanumeric characters")]
+    InvalidUsername {
+        /// The raw username that failed slugification.
+        username: String,
+    },
+    /// The project name contains no alphanumeric characters and cannot produce a valid slug.
+    #[error("Invalid `project_name` value {project_name:?}: contains no alphanumeric characters")]
+    InvalidProjectName {
+        /// The raw project name that failed slugification.
+        project_name: String,
+    },
     /// The `target` value contains no alphanumeric characters and cannot be slugified.
     #[error("Invalid `target` value {target:?}: contains no alphanumeric characters")]
     InvalidTarget {
@@ -549,8 +585,20 @@ fn validate_config(config: &Config) -> Result<(), ConfigError> {
         return Err(ConfigError::ConflictingRebuildFlags);
     }
 
+    if slugify(&config.username).is_empty() {
+        return Err(ConfigError::InvalidUsername {
+            username: config.username.clone(),
+        });
+    }
+
+    if slugify(&config.project_name).is_empty() {
+        return Err(ConfigError::InvalidProjectName {
+            project_name: config.project_name.clone(),
+        });
+    }
+
     if let Some(ref target) = config.target
-        && !target.chars().any(|character| character.is_alphanumeric())
+        && slugify(target).is_empty()
     {
         return Err(ConfigError::InvalidTarget {
             target: target.clone(),

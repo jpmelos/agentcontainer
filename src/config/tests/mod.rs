@@ -1,7 +1,11 @@
 mod environment_variables;
+mod get_container_name;
+mod get_image_name;
 mod mountpoints;
 
-use super::{CliArgs, Command, ConfigError, EnvironmentVariableEntry, MountpointEntry, get_config};
+use super::{
+    CliArgs, Command, Config, ConfigError, EnvironmentVariableEntry, MountpointEntry, get_config,
+};
 use std::{collections::HashMap, env, fs, path::Path};
 use tempfile::tempdir;
 
@@ -74,6 +78,23 @@ fn default_cli_args(command: Command) -> CliArgs {
         vec![],
         vec![],
     )
+}
+
+/// Construct a `Config` for use in tests, without going through CLI parsing or `figment`.
+fn make_config() -> Config {
+    Config {
+        dockerfile: String::from(".agentcontainer/Dockerfile"),
+        build_context: String::from("."),
+        project_name: String::from("myproject"),
+        username: String::from("alice"),
+        target: None,
+        allow_stale: false,
+        force_rebuild: false,
+        no_build_cache: false,
+        no_rebuild: false,
+        mountpoints: HashMap::new(),
+        environment_variables: HashMap::new(),
+    }
 }
 
 #[test]
@@ -664,206 +685,11 @@ mod default_values {
     }
 }
 
-#[test]
-fn force_rebuild_and_no_rebuild_together_is_an_error() {
-    let home_dir = tempdir().expect("Failed to create temporary directory.");
-    let cli_args = CliArgs::new(
-        Command::Build,
-        None,
-        None,
-        None,
-        None,
-        None,
-        false,
-        true, // force_rebuild
-        false,
-        true, // no_rebuild
-        vec![],
-        vec![],
-    );
-
-    let error = get_config(
-        home_dir
-            .path()
-            .to_str()
-            .expect("Temporary directory path is not valid UTF-8."),
-        &cli_args,
-    )
-    .expect_err("Expected `get_config` to fail with conflicting rebuild flags.");
-
-    assert!(
-        matches!(error, ConfigError::ConflictingRebuildFlags),
-        "Expected `ConfigError::ConflictingRebuildFlags`, got: {error:?}"
-    );
-}
-
-mod image_name {
+mod validation {
     use super::*;
 
     #[test]
-    fn image_name_without_target() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            Some(String::from("myproject")),
-            Some(String::from("alice")),
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![],
-            vec![],
-        );
-
-        let (_, config) = get_config(
-            home_dir
-                .path()
-                .to_str()
-                .expect("Temporary directory path is not valid UTF-8."),
-            &cli_args,
-        )
-        .expect("`get_config` failed.");
-
-        assert_eq!(config.image_name(), "agentcontainer-alice-myproject:latest");
-    }
-
-    #[test]
-    fn image_name_with_target() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            Some(String::from("myproject")),
-            Some(String::from("alice")),
-            Some(String::from("claude")),
-            false,
-            false,
-            false,
-            false,
-            vec![],
-            vec![],
-        );
-
-        let (_, config) = get_config(
-            home_dir
-                .path()
-                .to_str()
-                .expect("Temporary directory path is not valid UTF-8."),
-            &cli_args,
-        )
-        .expect("`get_config` failed.");
-
-        assert_eq!(
-            config.image_name(),
-            "agentcontainer-alice-myproject-claude:latest"
-        );
-    }
-
-    #[test]
-    fn image_name_slugifies_project_name() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            Some(String::from("My Project")),
-            Some(String::from("alice")),
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![],
-            vec![],
-        );
-
-        let (_, config) = get_config(
-            home_dir
-                .path()
-                .to_str()
-                .expect("Temporary directory path is not valid UTF-8."),
-            &cli_args,
-        )
-        .expect("`get_config` failed.");
-
-        assert_eq!(
-            config.image_name(),
-            "agentcontainer-alice-my-project:latest"
-        );
-    }
-
-    #[test]
-    fn image_name_slugifies_username() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            Some(String::from("myproject")),
-            Some(String::from("Alice Smith")),
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![],
-            vec![],
-        );
-
-        let (_, config) = get_config(
-            home_dir
-                .path()
-                .to_str()
-                .expect("Temporary directory path is not valid UTF-8."),
-            &cli_args,
-        )
-        .expect("`get_config` failed.");
-
-        assert_eq!(
-            config.image_name(),
-            "agentcontainer-alice-smith-myproject:latest"
-        );
-    }
-
-    #[test]
-    fn image_name_slugifies_target() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            Some(String::from("myproject")),
-            Some(String::from("alice")),
-            Some(String::from("My Target")),
-            false,
-            false,
-            false,
-            false,
-            vec![],
-            vec![],
-        );
-
-        let (_, config) = get_config(
-            home_dir
-                .path()
-                .to_str()
-                .expect("Temporary directory path is not valid UTF-8."),
-            &cli_args,
-        )
-        .expect("`get_config` failed.");
-
-        assert_eq!(
-            config.image_name(),
-            "agentcontainer-alice-myproject-my-target:latest"
-        );
-    }
-
-    #[test]
-    fn image_name_uses_unknown_when_username_slug_is_empty() {
+    fn username_not_slugifiable_is_an_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory.");
         let cli_args = CliArgs::new(
             Command::Config,
@@ -880,23 +706,23 @@ mod image_name {
             vec![],
         );
 
-        let (_, config) = get_config(
+        let error = get_config(
             home_dir
                 .path()
                 .to_str()
                 .expect("Temporary directory path is not valid UTF-8."),
             &cli_args,
         )
-        .expect("`get_config` failed.");
+        .expect_err("Expected `get_config` to fail with an invalid username.");
 
-        assert_eq!(
-            config.image_name(),
-            "agentcontainer-unknown-myproject:latest"
+        assert!(
+            matches!(error, ConfigError::InvalidUsername { .. }),
+            "Expected `ConfigError::InvalidUsername`, got: {error:?}"
         );
     }
 
     #[test]
-    fn image_name_uses_unknown_when_project_name_slug_is_empty() {
+    fn project_name_not_slugifiable_is_an_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory.");
         let cli_args = CliArgs::new(
             Command::Config,
@@ -913,73 +739,83 @@ mod image_name {
             vec![],
         );
 
-        let (_, config) = get_config(
+        let result = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8."),
+            &cli_args,
+        );
+
+        assert!(
+            matches!(result, Err(ConfigError::InvalidProjectName { .. })),
+            "Expected `InvalidProjectName` error, got: {result:?}"
+        );
+    }
+
+    #[test]
+    fn target_not_slugifiable_is_an_error() {
+        let home_dir = tempdir().expect("Failed to create temporary directory.");
+        let cli_args = CliArgs::new(
+            Command::Config,
+            None,
+            None,
+            Some(String::from("myproject")),
+            Some(String::from("alice")),
+            Some(String::from("@@@")),
+            false,
+            false,
+            false,
+            false,
+            vec![],
+            vec![],
+        );
+
+        let error = get_config(
             home_dir
                 .path()
                 .to_str()
                 .expect("Temporary directory path is not valid UTF-8."),
             &cli_args,
         )
-        .expect("`get_config` failed.");
+        .expect_err("Expected `get_config` to fail with an invalid target.");
 
-        assert_eq!(config.image_name(), "agentcontainer-alice-unknown:latest");
+        assert!(
+            matches!(error, ConfigError::InvalidTarget { .. }),
+            "Expected `ConfigError::InvalidTarget`, got: {error:?}"
+        );
     }
 
     #[test]
-    fn image_name_uses_unknown_when_target_slug_is_empty() {
-        // `get_config` rejects targets with no alphanumeric characters, so we construct `Config`
-        // directly to test the `image_name` fallback for an empty target slug.
-        use super::super::Config;
-        let config = Config {
-            dockerfile: String::from(".agentcontainer/Dockerfile"),
-            build_context: String::from("."),
-            project_name: String::from("myproject"),
-            username: String::from("alice"),
-            target: Some(String::from("@@@")),
-            allow_stale: false,
-            force_rebuild: false,
-            no_build_cache: false,
-            no_rebuild: false,
-            mountpoints: HashMap::new(),
-            environment_variables: HashMap::new(),
-        };
+    fn force_rebuild_and_no_rebuild_together_is_an_error() {
+        let home_dir = tempdir().expect("Failed to create temporary directory.");
+        let cli_args = CliArgs::new(
+            Command::Build,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            true, // force_rebuild
+            false,
+            true, // no_rebuild
+            vec![],
+            vec![],
+        );
 
-        assert_eq!(
-            config.image_name(),
-            "agentcontainer-alice-myproject-unknown:latest"
+        let error = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8."),
+            &cli_args,
+        )
+        .expect_err("Expected `get_config` to fail with conflicting rebuild flags.");
+
+        assert!(
+            matches!(error, ConfigError::ConflictingRebuildFlags),
+            "Expected `ConfigError::ConflictingRebuildFlags`, got: {error:?}"
         );
     }
-}
-
-#[test]
-fn invalid_target_with_no_alphanumeric_chars_is_an_error() {
-    let home_dir = tempdir().expect("Failed to create temporary directory.");
-    let cli_args = CliArgs::new(
-        Command::Config,
-        None,
-        None,
-        Some(String::from("myproject")),
-        Some(String::from("alice")),
-        Some(String::from("@@@")),
-        false,
-        false,
-        false,
-        false,
-        vec![],
-        vec![],
-    );
-
-    let error = get_config(
-        home_dir
-            .path()
-            .to_str()
-            .expect("Temporary directory path is not valid UTF-8."),
-        &cli_args,
-    )
-    .expect_err("Expected `get_config` to fail with an invalid target.");
-
-    assert!(
-        matches!(error, ConfigError::InvalidTarget { .. }),
-        "Expected `ConfigError::InvalidTarget`, got: {error:?}"
-    );
 }

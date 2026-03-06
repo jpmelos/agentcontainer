@@ -100,15 +100,29 @@ underscore, followed by ASCII letters, digits, or underscores.
 The Docker image tag is derived from the resolved configuration:
 
 ```
-agentcontainer-<username>-<project_name>:latest
-agentcontainer-<username>-<project_name>-<target>:latest  # when target is set
+agentcontainer_<username>_<project_name>:latest
+agentcontainer_<username>_<project_name>_<target>:latest  # when target is set
 ```
 
 `username`, `project_name`, and `target` are all slugified before being
-embedded in the tag: lowercased, non-alphanumeric characters replaced with `-`,
-consecutive dashes collapsed, and leading/trailing dashes trimmed. If the
-result is empty for `username` or `project_name`, `unknown` is used as a
-fallback.
+embedded in the tag: lowercased, non-alphanumeric characters replaced with `_`,
+consecutive underscores collapsed, and leading/trailing underscores trimmed.
+
+`username` and `project_name` must contain at least one alphanumeric character.
+If the slug of either value would be empty, `get_config` returns an error.
+
+### Container naming
+
+When running a container, the name is derived from the project name and a
+random numeric suffix:
+
+```
+agentcontainer_<project_name>_<suffix>
+```
+
+The slugified project name is truncated to 41 characters (with any trailing
+underscore removed after truncation) so that the full container name never
+exceeds Docker's 63-character limit for container names.
 
 ### Example configuration file
 
@@ -173,3 +187,26 @@ The following build arguments are passed automatically:
 | -------------- | ------------------------------------ |
 | `USERNAME`     | The raw `username` config value.     |
 | `BUILD_DATE`   | Today's date in `YYYY-MM-DD` format. |
+
+### `run`
+
+Run the agent container. This replaces the current process with `docker run`
+via `exec`.
+
+```
+agentcontainer run
+```
+
+The container is started with:
+
+- **UID/GID mapping**: the container runs as the current user and group, with
+  group `0` added via `--group-add`.
+- **Current directory mount**: the working directory is bind-mounted into the
+  container at the same path and set as the container's working directory.
+- **Git worktree mount**: if the current directory is a linked Git worktree,
+  the main worktree root is also bind-mounted so that Git objects are
+  accessible.
+- **Configured mountpoints and environment variables**: as defined in the
+  configuration.
+- **`--init` and `--rm`**: the container uses an init process and is
+  automatically removed on exit.

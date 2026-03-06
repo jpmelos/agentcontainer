@@ -64,7 +64,7 @@ pub(crate) fn build(
     filesystem: &impl Filesystem,
     clock: &impl Clock,
 ) -> Result<BuildOutcome, BuildError> {
-    let image_name = config.image_name();
+    let image_name = config.get_image_name();
     let existing_image_created = docker
         .fetch_image_creation_timestamp(&image_name)
         .map_err(BuildError::StalenessCheck)?;

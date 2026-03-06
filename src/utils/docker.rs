@@ -3,7 +3,9 @@
 use crate::config::Config;
 use anyhow::Context as _;
 use chrono::{DateTime, Utc};
+use std::convert::Infallible;
 use std::io::Error as IoError;
+use std::os::unix::process::CommandExt as _;
 use std::process::{Command, ExitStatus, Stdio};
 use thiserror::Error;
 
@@ -37,6 +39,12 @@ pub(crate) trait DockerBackend {
         image_name: &str,
         build_date: &str,
     ) -> Result<(), DockerBuildError>;
+
+    /// Replace the current process with `docker run` using the given arguments.
+    ///
+    /// On success, the current process is replaced and this method never returns. On failure,
+    /// returns the I/O error from the `exec` system call.
+    fn exec_docker_run(&self, args: &[String]) -> Result<Infallible, IoError>;
 }
 
 /// The real Docker backend that shells out to the `docker` CLI.
@@ -104,5 +112,10 @@ impl DockerBackend for RealDockerBackend {
         } else {
             Err(DockerBuildError::NonZeroExit(status))
         }
+    }
+
+    fn exec_docker_run(&self, args: &[String]) -> Result<Infallible, IoError> {
+        let error = Command::new("docker").args(args).exec();
+        Err(error)
     }
 }
