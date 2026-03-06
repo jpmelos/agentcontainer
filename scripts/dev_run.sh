@@ -8,4 +8,7 @@ if ! docker image inspect agentcontainer-dev &>/dev/null; then
     bash scripts/dev_build.sh
 fi
 
+# Remove existing container if it's already running.
+docker rm -f agentcontainer-dev &>/dev/null || true
+
 docker run --name agentcontainer-dev --rm -d -v "$(pwd):$(pwd)" -w "$(pwd)" agentcontainer-dev

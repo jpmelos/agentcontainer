@@ -16,15 +16,15 @@ ARG USERNAME
 ENV HOME=/home/${USERNAME}
 ENV PATH="${HOME}/.cargo/bin:${PATH}"
 
-COPY rust-toolchain.toml .
+COPY rust-toolchain.toml scripts/install_rust_dev_dependencies.sh .
 
 # Install Rust toolchain and dependencies.
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o install_rust.sh && \
     bash install_rust.sh -y && \
     rustup toolchain install && \
+    ./install_rust_dev_dependencies.sh && \
     rm install_rust.sh && \
     rm rust-toolchain.toml && \
-    cargo install --locked cargo-binstall && \
-    cargo binstall cargo-nextest cargo-deny cargo-machete
+    rm install_rust_dev_dependencies.sh
 
 ENTRYPOINT ["sleep", "infinity"]

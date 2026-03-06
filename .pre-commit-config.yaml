@@ -89,7 +89,7 @@ repos:
       - name: Check Cargo dependencies with `cargo deny`
         id: cargo-deny
         entry: cargo deny --all-features check
-        language: rust
+        language: system
         types:
           - file
           - toml
@@ -98,7 +98,7 @@ repos:
 
       - name: Drop unused Rust dependencies
         id: cargo-machete
-        language: rust
+        language: system
         entry: cargo machete
         types_or:
           - cargo

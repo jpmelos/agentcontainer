@@ -37,9 +37,7 @@ jobs:
           restore-keys: python-${{ env.PYTHON_VERSION }}-pre-commit-${{ env.PRECOMMIT_VERSION }}
 
       - name: Install Rust dependencies
-        run: |
-          cargo install --locked cargo-binstall
-          cargo binstall cargo-nextest cargo-deny cargo-machete
+        run: ./scripts/install_rust_dev_dependencies.sh
 
       - name: Compile tests
         run: cargo nextest run --no-run
