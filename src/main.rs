@@ -4,6 +4,7 @@
 
 mod build;
 mod config;
+mod run;
 mod utils;
 
 use anyhow::{Context as _, Result};
@@ -14,6 +15,7 @@ use std::env;
 use utils::clock::SystemClock;
 use utils::docker::RealDockerBackend;
 use utils::fs::RealFilesystem;
+use utils::git::RealGitContext;
 
 #[expect(
     clippy::print_stdout,
@@ -50,6 +52,33 @@ fn main() -> Result<()> {
                 Err(error) => {
                     return Err(error.into());
                 }
+            }
+        }
+        Command::Run => {
+            let current_dir = env::current_dir()
+                .context("Failed to get current working directory")?
+                .to_str()
+                .context("Current directory path is not valid UTF-8")?
+                .to_owned();
+
+            // SAFETY: `getuid` is always safe to call; it merely reads the process's real UID.
+            let uid = unsafe { libc::getuid() };
+            // SAFETY: `getgid` is always safe to call; it merely reads the process's real GID.
+            let gid = unsafe { libc::getgid() };
+
+            let random_suffix = utils::random::random_name_suffix();
+
+            match run::run(
+                &config,
+                &RealDockerBackend,
+                &RealGitContext,
+                uid,
+                gid,
+                &current_dir,
+                random_suffix,
+            ) {
+                Ok(infallible) => match infallible {},
+                Err(error) => return Err(error.into()),
             }
         }
     }

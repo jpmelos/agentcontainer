@@ -4,73 +4,63 @@ pub(crate) fn slugify(raw: &str) -> String {
     let replaced: String = lowercased
         .chars()
         .map(|character| {
-            if character.is_ascii_alphanumeric() || character == '-' {
+            if character.is_ascii_alphanumeric() || character == '_' {
                 character
             } else {
-                '-'
+                '_'
             }
         })
         .collect();
 
-    // Collapse consecutive dashes into one.
+    // Collapse consecutive underscores into one.
     let mut collapsed = String::with_capacity(replaced.len());
-    let mut last_was_dash = false;
+    let mut last_was_underscore = false;
     for character in replaced.chars() {
-        if character == '-' {
-            if !last_was_dash {
+        if character == '_' {
+            if !last_was_underscore {
                 collapsed.push(character);
             }
-            last_was_dash = true;
+            last_was_underscore = true;
         } else {
             collapsed.push(character);
-            last_was_dash = false;
+            last_was_underscore = false;
         }
     }
 
-    // Trim leading and trailing dashes.
-    collapsed.trim_matches('-').to_owned()
-}
-
-/// Slugify a raw string, returning `"unknown"` if the result would be empty.
-pub(crate) fn slugify_or_unknown(raw: &str) -> String {
-    let slug = slugify(raw);
-    if slug.is_empty() {
-        String::from("unknown")
-    } else {
-        slug
-    }
+    // Trim leading and trailing underscores.
+    collapsed.trim_matches('_').to_owned()
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{slugify, slugify_or_unknown};
+    use super::slugify;
 
     mod slugify {
         use super::*;
 
         #[test]
         fn slugify_lowercases_and_replaces_spaces() {
-            assert_eq!(slugify("Hello World"), "hello-world");
+            assert_eq!(slugify("Hello World"), "hello_world");
         }
 
         #[test]
         fn slugify_handles_special_chars() {
-            assert_eq!(slugify("foo@bar!baz"), "foo-bar-baz");
+            assert_eq!(slugify("foo@bar!baz"), "foo_bar_baz");
         }
 
         #[test]
-        fn slugify_collapses_consecutive_dashes() {
-            assert_eq!(slugify("foo--bar"), "foo-bar");
+        fn slugify_collapses_consecutive_underscores() {
+            assert_eq!(slugify("foo__bar"), "foo_bar");
         }
 
         #[test]
         fn slugify_collapses_consecutive_special_chars() {
-            assert_eq!(slugify("foo  bar"), "foo-bar");
+            assert_eq!(slugify("foo  bar"), "foo_bar");
         }
 
         #[test]
-        fn slugify_trims_leading_trailing_dashes() {
-            assert_eq!(slugify("-foo-bar-"), "foo-bar");
+        fn slugify_trims_leading_trailing_underscores() {
+            assert_eq!(slugify("_foo_bar_"), "foo_bar");
         }
 
         #[test]
@@ -86,20 +76,6 @@ mod tests {
         #[test]
         fn slugify_all_special_chars_returns_empty_string() {
             assert_eq!(slugify("@@@"), "");
-        }
-    }
-
-    mod slugify_or_unknown {
-        use super::*;
-
-        #[test]
-        fn slugify_or_unknown_returns_slug_when_non_empty() {
-            assert_eq!(slugify_or_unknown("Hello World"), "hello-world");
-        }
-
-        #[test]
-        fn slugify_or_unknown_returns_unknown_when_slug_is_empty() {
-            assert_eq!(slugify_or_unknown("@@@"), "unknown");
         }
     }
 }

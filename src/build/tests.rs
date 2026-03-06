@@ -6,6 +6,8 @@ use crate::utils::fs::Filesystem;
 use anyhow::anyhow;
 use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone as _, Utc};
 use std::collections::HashMap;
+use std::convert::Infallible;
+use std::io::Error as IoError;
 
 // ---------------------------------------------------------------------------
 // Helpers: minimal Config constructor.
@@ -35,7 +37,7 @@ fn make_config(
 
 /// Return the image name produced by the default `make_config` config.
 fn default_image_name() -> String {
-    make_config(".agentcontainer/Dockerfile", false, false, false).image_name()
+    make_config(".agentcontainer/Dockerfile", false, false, false).get_image_name()
 }
 
 // ---------------------------------------------------------------------------
@@ -165,6 +167,10 @@ impl DockerBackend for MockDocker {
                 unreachable!("Tests do not produce SpawnFailed errors.")
             }
         }
+    }
+
+    fn exec_docker_run(&self, _args: &[String]) -> Result<Infallible, IoError> {
+        unreachable!("Build tests do not call `exec_docker_run`.")
     }
 }
 
@@ -414,6 +420,10 @@ mod build {
             ) -> Result<(), DockerBuildError> {
                 self.captured_build_date.set(Some(String::from(build_date)));
                 Ok(())
+            }
+
+            fn exec_docker_run(&self, _args: &[String]) -> Result<Infallible, IoError> {
+                unreachable!("Build tests do not call `exec_docker_run`.")
             }
         }
 
