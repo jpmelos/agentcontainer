@@ -276,47 +276,47 @@ impl Config {
 #[command(about, version)]
 pub(crate) struct CliArgs {
     /// Path to the Dockerfile.
-    #[arg(long, global = true)]
+    #[arg(long)]
     dockerfile: Option<String>,
 
     /// Directory used as the Docker build context.
-    #[arg(long, global = true)]
+    #[arg(long)]
     build_context: Option<String>,
 
     /// Name used in Docker image tag.
-    #[arg(long, global = true)]
+    #[arg(long)]
     project_name: Option<String>,
 
     /// Username for image tag and `USERNAME` build argument.
-    #[arg(long, global = true)]
+    #[arg(long)]
     username: Option<String>,
 
     /// Docker build `--target`. Also appended to image name.
-    #[arg(long, global = true)]
+    #[arg(long)]
     target: Option<String>,
 
     /// Use stale image if build fails.
-    #[arg(long, global = true)]
+    #[arg(long)]
     allow_stale: bool,
 
     /// Force rebuild regardless of staleness.
-    #[arg(long, global = true)]
+    #[arg(long)]
     force_rebuild: bool,
 
     /// Pass `--no-cache` to `docker build`.
-    #[arg(long, global = true)]
+    #[arg(long)]
     no_build_cache: bool,
 
     /// Skip rebuild; error if no image exists.
-    #[arg(long, global = true)]
+    #[arg(long)]
     no_rebuild: bool,
 
     /// Mountpoint as "host:container", "/path" (same path), or "!/path" (remove). Repeatable.
-    #[arg(long = "mountpoint", global = true)]
+    #[arg(long = "mountpoint")]
     mountpoints: Vec<String>,
 
     /// Environment variable as "KEY=value", "KEY" (inherit), or "!KEY" (remove). Repeatable.
-    #[arg(long = "environment-variable", global = true)]
+    #[arg(long = "environment-variable")]
     environment_variables: Vec<String>,
 
     #[command(subcommand)]
