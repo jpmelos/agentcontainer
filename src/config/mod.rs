@@ -399,7 +399,7 @@ pub(crate) struct CliArgs {
     volumes: Vec<String>,
 
     /// Environment variable as "KEY=value", "KEY" (inherit), or "!KEY" (remove). Repeatable.
-    #[arg(long = "environment-variable", alias = "env", short = 'e')]
+    #[arg(long = "env", short = 'e')]
     environment_variables: Vec<String>,
 
     /// Path to an executable to run before `docker run`. Its stdout is parsed as a TOML list of
@@ -562,7 +562,7 @@ pub(crate) fn get_config<'cli_args>(
     // Parse CLI `--volume` args into a map.
     let cli_volumes = parse_cli_volumes(&cli_args.volumes)?;
 
-    // Parse CLI `--environment-variable` args into a map.
+    // Parse CLI `--env` args into a map.
     let cli_env_vars = parse_cli_environment_variables(&cli_args.environment_variables)?;
 
     // Build the provider list in priority order (lowest to highest).
@@ -722,7 +722,7 @@ fn parse_cli_volumes(raw_volumes: &[String]) -> Result<HashMap<String, VolumeEnt
     Ok(volumes)
 }
 
-/// Parse the list of `--environment-variable` CLI arguments into a
+/// Parse the list of `--env` CLI arguments into a
 /// `HashMap<String, EnvironmentVariableEntry>`.
 ///
 /// Accepted formats:

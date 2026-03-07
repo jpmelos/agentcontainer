@@ -200,7 +200,7 @@ SSH_AUTH_SOCK = true # inherit from host
 OLD_VAR = false      # suppress from a lower-priority source
 ```
 
-On the CLI, use `--env` (or `--environment-variable` / `-e`) (repeatable):
+On the CLI, use `--env` (or `-e`) (repeatable):
 
 ```sh
 # Set a literal value.
