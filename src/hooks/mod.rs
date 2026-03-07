@@ -8,7 +8,7 @@ use toml::de::Error as TomlError;
 /// Execute the pre-run hook if configured and return extra `docker run` arguments.
 ///
 /// When `pre_run` is `Some`, the referenced executable is run and its stdout is parsed as a TOML
-/// array of strings (e.g. `["--mount", "/host:/container"]`). If `pre_run` is `None`, an empty
+/// array of strings (e.g. `["--volume", "/host:/container"]`). If `pre_run` is `None`, an empty
 /// vector is returned.
 pub(crate) fn execute_pre_run_hook(pre_run: Option<&str>) -> Result<Vec<String>> {
     let Some(pre_run_path) = pre_run else {

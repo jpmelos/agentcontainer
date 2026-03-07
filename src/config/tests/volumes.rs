@@ -1,11 +1,9 @@
-use super::{
-    CliArgs, Command, ConfigError, MountpointEntry, default_cli_args, get_config, write_file,
-};
+use super::{CliArgs, Command, ConfigError, VolumeEntry, default_cli_args, get_config, write_file};
 use std::env;
 use tempfile::tempdir;
 
 #[test]
-fn default_mountpoints_is_empty() {
+fn default_volumes_is_empty() {
     let home_dir = tempdir().expect("Failed to create temporary directory");
     let cli_args = default_cli_args(Command::Config);
 
@@ -18,20 +16,20 @@ fn default_mountpoints_is_empty() {
     )
     .expect("`get_config` failed");
 
-    assert!(config.mountpoints.is_empty());
+    assert!(config.volumes.is_empty());
 }
 
 mod parsing_toml {
     use super::*;
 
     #[test]
-    fn single_toml_file_with_mountpoints_is_read_correctly() {
+    fn single_toml_file_with_volumes_is_read_correctly() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
             r#"
-            [mountpoints]
+            [volumes]
             "/container" = "/host"
             "/other" = false
             "#,
@@ -49,10 +47,10 @@ mod parsing_toml {
         .expect("`get_config` failed");
 
         assert!(matches!(
-            config.mountpoints.get("/container"),
-            Some(MountpointEntry::Active(host)) if host == "/host"
+            config.volumes.get("/container"),
+            Some(VolumeEntry::Active(host)) if host == "/host"
         ));
-        assert!(!config.mountpoints.contains_key("/other"));
+        assert!(!config.volumes.contains_key("/other"));
     }
 
     #[test]
@@ -62,14 +60,14 @@ mod parsing_toml {
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
             r#"
-            [mountpoints]
+            [volumes]
             "/container1" = "/host1"
             "#,
         );
         write_file(
             &cwd.path().join(".agentcontainer/config.local.toml"),
             r#"
-            [mountpoints]
+            [volumes]
             "/container2" = "/host2"
             "#,
         );
@@ -86,12 +84,12 @@ mod parsing_toml {
         .expect("`get_config` failed");
 
         assert!(matches!(
-            config.mountpoints.get("/container1"),
-            Some(MountpointEntry::Active(host)) if host == "/host1"
+            config.volumes.get("/container1"),
+            Some(VolumeEntry::Active(host)) if host == "/host1"
         ));
         assert!(matches!(
-            config.mountpoints.get("/container2"),
-            Some(MountpointEntry::Active(host)) if host == "/host2"
+            config.volumes.get("/container2"),
+            Some(VolumeEntry::Active(host)) if host == "/host2"
         ));
     }
 
@@ -102,14 +100,14 @@ mod parsing_toml {
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
             r#"
-            [mountpoints]
+            [volumes]
             "/container" = "/host-from-cwd"
             "#,
         );
         write_file(
             &cwd.path().join(".agentcontainer/config.local.toml"),
             r#"
-            [mountpoints]
+            [volumes]
             "/container" = "/host-from-cwd-local"
             "#,
         );
@@ -126,8 +124,8 @@ mod parsing_toml {
         .expect("`get_config` failed");
 
         assert!(matches!(
-            config.mountpoints.get("/container"),
-            Some(MountpointEntry::Active(host)) if host == "/host-from-cwd-local"
+            config.volumes.get("/container"),
+            Some(VolumeEntry::Active(host)) if host == "/host-from-cwd-local"
         ));
     }
 
@@ -138,7 +136,7 @@ mod parsing_toml {
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
             r#"
-            [mountpoints]
+            [volumes]
             "/container" = true
             "#,
         );
@@ -156,11 +154,11 @@ mod parsing_toml {
 
         assert!(
             matches!(
-                config.mountpoints.get("/container"),
-                Some(MountpointEntry::SamePath)
+                config.volumes.get("/container"),
+                Some(VolumeEntry::SamePath)
             ),
             "Expected `SamePath`, got: {:?}",
-            config.mountpoints.get("/container")
+            config.volumes.get("/container")
         );
     }
 
@@ -171,7 +169,7 @@ mod parsing_toml {
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
             r#"
-            [mountpoints]
+            [volumes]
             "/container" = "relative-host"
             "#,
         );
@@ -188,8 +186,8 @@ mod parsing_toml {
         .expect("`get_config` should accept a relative host path");
 
         assert!(matches!(
-            config.mountpoints.get("/container"),
-            Some(MountpointEntry::Active(host)) if host == "relative-host"
+            config.volumes.get("/container"),
+            Some(VolumeEntry::Active(host)) if host == "relative-host"
         ));
     }
 }
@@ -198,12 +196,12 @@ mod parsing_env_var {
     use super::*;
 
     #[test]
-    fn env_var_same_path_mountpoint_is_parsed_correctly() {
+    fn env_var_same_path_volume_is_parsed_correctly() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         // SAFETY: `set_var` is safe here because `cargo nextest` runs each test in its own process,
         // so there are no other threads to race with.
         unsafe {
-            env::set_var("AGENTCONTAINER_MOUNTPOINTS", r#"{"/shared" = true}"#);
+            env::set_var("AGENTCONTAINER_VOLUMES", r#"{"/shared" = true}"#);
         };
         let cli_args = default_cli_args(Command::Config);
 
@@ -217,12 +215,9 @@ mod parsing_env_var {
         .expect("`get_config` failed");
 
         assert!(
-            matches!(
-                config.mountpoints.get("/shared"),
-                Some(MountpointEntry::SamePath)
-            ),
+            matches!(config.volumes.get("/shared"), Some(VolumeEntry::SamePath)),
             "Expected `SamePath`, got: {:?}",
-            config.mountpoints.get("/shared")
+            config.volumes.get("/shared")
         );
     }
 }
@@ -231,7 +226,7 @@ mod parsing_cli_args {
     use super::*;
 
     #[test]
-    fn cli_mountpoint_host_container_format_is_parsed_correctly() {
+    fn cli_volume_host_container_format_is_parsed_correctly() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cli_args = CliArgs::new(
             Command::Config,
@@ -259,13 +254,13 @@ mod parsing_cli_args {
         .expect("`get_config` failed");
 
         assert!(matches!(
-            config.mountpoints.get("/container"),
-            Some(MountpointEntry::Active(host)) if host == "/host"
+            config.volumes.get("/container"),
+            Some(VolumeEntry::Active(host)) if host == "/host"
         ));
     }
 
     #[test]
-    fn cli_mountpoint_same_path_format_is_parsed_correctly() {
+    fn cli_volume_same_path_format_is_parsed_correctly() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cli_args = CliArgs::new(
             Command::Config,
@@ -294,22 +289,22 @@ mod parsing_cli_args {
 
         assert!(
             matches!(
-                config.mountpoints.get("/same-path"),
-                Some(MountpointEntry::SamePath)
+                config.volumes.get("/same-path"),
+                Some(VolumeEntry::SamePath)
             ),
             "Expected `SamePath`, got: {:?}",
-            config.mountpoints.get("/same-path")
+            config.volumes.get("/same-path")
         );
     }
 
     #[test]
-    fn cli_mountpoint_removal_format_sets_remove() {
+    fn cli_volume_removal_format_sets_remove() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
             r#"
-            [mountpoints]
+            [volumes]
             "/container" = "/host-from-cwd"
             "#,
         );
@@ -339,7 +334,7 @@ mod parsing_cli_args {
         )
         .expect("`get_config` failed");
 
-        assert!(!config.mountpoints.contains_key("/container"));
+        assert!(!config.volumes.contains_key("/container"));
     }
 
     #[test]
@@ -371,8 +366,8 @@ mod parsing_cli_args {
         .expect("`get_config` should accept a relative host path");
 
         assert!(matches!(
-            config.mountpoints.get("/container"),
-            Some(MountpointEntry::Active(host)) if host == "relative-host"
+            config.volumes.get("/container"),
+            Some(VolumeEntry::Active(host)) if host == "relative-host"
         ));
     }
 }
@@ -381,13 +376,13 @@ mod priority {
     use super::*;
 
     #[test]
-    fn cli_mountpoint_overrides_toml_for_same_container_path() {
+    fn cli_volume_overrides_toml_for_same_container_path() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
             r#"
-            [mountpoints]
+            [volumes]
             "/container" = "/host-from-toml"
             "#,
         );
@@ -418,8 +413,8 @@ mod priority {
         .expect("`get_config` failed");
 
         assert!(matches!(
-            config.mountpoints.get("/container"),
-            Some(MountpointEntry::Active(host)) if host == "/host-from-cli"
+            config.volumes.get("/container"),
+            Some(VolumeEntry::Active(host)) if host == "/host-from-cli"
         ));
     }
 
@@ -430,7 +425,7 @@ mod priority {
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
             r#"
-            [mountpoints]
+            [volumes]
             "/data" = "/host/data"
             "#,
         );
@@ -461,12 +456,9 @@ mod priority {
         .expect("`get_config` failed");
 
         assert!(
-            matches!(
-                config.mountpoints.get("/data"),
-                Some(MountpointEntry::SamePath)
-            ),
+            matches!(config.volumes.get("/data"), Some(VolumeEntry::SamePath)),
             "Expected `SamePath`, got: {:?}",
-            config.mountpoints.get("/data")
+            config.volumes.get("/data")
         );
     }
 
@@ -477,14 +469,14 @@ mod priority {
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
             r#"
-            [mountpoints]
+            [volumes]
             "/data" = true
             "#,
         );
         write_file(
             &cwd.path().join(".agentcontainer/config.local.toml"),
             r#"
-            [mountpoints]
+            [volumes]
             "/data" = "/other/host/path"
             "#,
         );
@@ -501,8 +493,8 @@ mod priority {
         .expect("`get_config` failed");
 
         assert!(matches!(
-            config.mountpoints.get("/data"),
-            Some(MountpointEntry::Active(host)) if host == "/other/host/path"
+            config.volumes.get("/data"),
+            Some(VolumeEntry::Active(host)) if host == "/other/host/path"
         ));
     }
 }
@@ -511,7 +503,7 @@ mod validation {
     use super::*;
 
     #[test]
-    fn cli_mountpoint_empty_string_triggers_invalid_mountpoint_error() {
+    fn cli_volume_empty_string_triggers_invalid_volume_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cli_args = CliArgs::new(
             Command::Config,
@@ -536,16 +528,16 @@ mod validation {
                 .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect_err("Expected `get_config` to fail with an empty mountpoint argument");
+        .expect_err("Expected `get_config` to fail with an empty volume argument");
 
         assert!(
-            matches!(error, ConfigError::InvalidMountpoint { .. }),
-            "Expected `ConfigError::InvalidMountpoint`, got: {error:?}"
+            matches!(error, ConfigError::InvalidVolume { .. }),
+            "Expected `ConfigError::InvalidVolume`, got: {error:?}"
         );
     }
 
     #[test]
-    fn malformed_cli_mountpoint_empty_host_triggers_invalid_mountpoint_error() {
+    fn malformed_cli_volume_empty_host_triggers_invalid_volume_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cli_args = CliArgs::new(
             Command::Config,
@@ -573,13 +565,13 @@ mod validation {
         .expect_err("Expected `get_config` to fail with an empty host path");
 
         assert!(
-            matches!(error, ConfigError::InvalidMountpoint { .. }),
-            "Expected `ConfigError::InvalidMountpoint`, got: {error:?}"
+            matches!(error, ConfigError::InvalidVolume { .. }),
+            "Expected `ConfigError::InvalidVolume`, got: {error:?}"
         );
     }
 
     #[test]
-    fn malformed_cli_mountpoint_empty_container_path_triggers_invalid_mountpoint_error() {
+    fn malformed_cli_volume_empty_container_path_triggers_invalid_volume_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cli_args = CliArgs::new(
             Command::Config,
@@ -607,13 +599,13 @@ mod validation {
         .expect_err("Expected `get_config` to fail with an empty container path");
 
         assert!(
-            matches!(error, ConfigError::InvalidMountpoint { .. }),
-            "Expected `ConfigError::InvalidMountpoint`, got: {error:?}"
+            matches!(error, ConfigError::InvalidVolume { .. }),
+            "Expected `ConfigError::InvalidVolume`, got: {error:?}"
         );
     }
 
     #[test]
-    fn cli_mountpoint_removal_with_colon_in_container_path_triggers_invalid_mountpoint_error() {
+    fn cli_volume_removal_with_colon_in_container_path_triggers_invalid_volume_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cli_args = CliArgs::new(
             Command::Config,
@@ -641,13 +633,13 @@ mod validation {
         .expect_err("Expected `get_config` to fail with a colon in the removal container path");
 
         assert!(
-            matches!(error, ConfigError::InvalidMountpoint { .. }),
-            "Expected `ConfigError::InvalidMountpoint`, got: {error:?}"
+            matches!(error, ConfigError::InvalidVolume { .. }),
+            "Expected `ConfigError::InvalidVolume`, got: {error:?}"
         );
     }
 
     #[test]
-    fn cli_mountpoint_with_multiple_colons_triggers_invalid_mountpoint_error() {
+    fn cli_volume_with_multiple_colons_triggers_invalid_volume_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cli_args = CliArgs::new(
             Command::Config,
@@ -675,13 +667,13 @@ mod validation {
         .expect_err("Expected `get_config` to fail with multiple colons");
 
         assert!(
-            matches!(error, ConfigError::InvalidMountpoint { .. }),
-            "Expected `ConfigError::InvalidMountpoint`, got: {error:?}"
+            matches!(error, ConfigError::InvalidVolume { .. }),
+            "Expected `ConfigError::InvalidVolume`, got: {error:?}"
         );
     }
 
     #[test]
-    fn cli_same_path_with_relative_path_triggers_invalid_mountpoint_path_error() {
+    fn cli_same_path_with_relative_path_triggers_invalid_volume_path_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cli_args = CliArgs::new(
             Command::Config,
@@ -706,16 +698,16 @@ mod validation {
                 .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect_err("Expected `get_config` to fail with a relative same-path mountpoint");
+        .expect_err("Expected `get_config` to fail with a relative same-path volume");
 
         assert!(
-            matches!(error, ConfigError::InvalidMountpointPath { .. }),
-            "Expected `ConfigError::InvalidMountpointPath`, got: {error:?}"
+            matches!(error, ConfigError::InvalidVolumePath { .. }),
+            "Expected `ConfigError::InvalidVolumePath`, got: {error:?}"
         );
     }
 
     #[test]
-    fn cli_host_container_with_relative_container_path_triggers_invalid_mountpoint_path_error() {
+    fn cli_host_container_with_relative_container_path_triggers_invalid_volume_path_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cli_args = CliArgs::new(
             Command::Config,
@@ -743,19 +735,19 @@ mod validation {
         .expect_err("Expected `get_config` to fail with a relative container path");
 
         assert!(
-            matches!(error, ConfigError::InvalidMountpointPath { .. }),
-            "Expected `ConfigError::InvalidMountpointPath`, got: {error:?}"
+            matches!(error, ConfigError::InvalidVolumePath { .. }),
+            "Expected `ConfigError::InvalidVolumePath`, got: {error:?}"
         );
     }
 
     #[test]
-    fn toml_mountpoint_with_relative_container_path_triggers_invalid_mountpoint_path_error() {
+    fn toml_volume_with_relative_container_path_triggers_invalid_volume_path_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
             r#"
-            [mountpoints]
+            [volumes]
             "relative" = "/host"
             "#,
         );
@@ -772,19 +764,19 @@ mod validation {
         .expect_err("Expected `get_config` to fail with a relative container path in TOML");
 
         assert!(
-            matches!(error, ConfigError::InvalidMountpointPath { .. }),
-            "Expected `ConfigError::InvalidMountpointPath`, got: {error:?}"
+            matches!(error, ConfigError::InvalidVolumePath { .. }),
+            "Expected `ConfigError::InvalidVolumePath`, got: {error:?}"
         );
     }
 
     #[test]
-    fn toml_same_path_with_relative_path_triggers_invalid_mountpoint_path_error() {
+    fn toml_same_path_with_relative_path_triggers_invalid_volume_path_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
             r#"
-            [mountpoints]
+            [volumes]
             "relative" = true
             "#,
         );
@@ -798,11 +790,11 @@ mod validation {
                 .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect_err("Expected `get_config` to fail with a relative same-path mountpoint in TOML");
+        .expect_err("Expected `get_config` to fail with a relative same-path volume in TOML");
 
         assert!(
-            matches!(error, ConfigError::InvalidMountpointPath { .. }),
-            "Expected `ConfigError::InvalidMountpointPath`, got: {error:?}"
+            matches!(error, ConfigError::InvalidVolumePath { .. }),
+            "Expected `ConfigError::InvalidVolumePath`, got: {error:?}"
         );
     }
 }

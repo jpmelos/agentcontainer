@@ -7,7 +7,7 @@
 //! This is essential for `environment_variables`, where the inner fields of two entries for the
 //! same variable name across sources must not be merged together.
 //!
-//! Before merging, each provider's mountpoint keys and values undergo tilde expansion so that
+//! Before merging, each provider's volume keys and values undergo tilde expansion so that
 //! `~/.ssh` and `/home/alice/.ssh` from different sources are recognized as the same key during
 //! priority resolution.
 
@@ -19,7 +19,7 @@ use figment::{
 /// A figment provider that merges multiple providers in priority order using controlled-depth
 /// merging.
 ///
-/// Mountpoint paths are tilde-expanded per-provider before merging so that priority resolution
+/// Volume paths are tilde-expanded per-provider before merging so that priority resolution
 /// operates on canonical absolute paths.
 pub(crate) struct MergingProvider {
     providers: Vec<Box<dyn Provider>>,
@@ -47,7 +47,7 @@ impl Provider for MergingProvider {
             // Propagate errors from any individual provider.
             let provider_data = provider.data()?;
             for (_profile, mut dict) in provider_data {
-                expand_tildes_in_mountpoints(&mut dict, &self.home_dir);
+                expand_tildes_in_volumes(&mut dict, &self.home_dir);
                 merge_dicts(&mut merged, &dict);
             }
         }
@@ -70,16 +70,16 @@ fn expand_tilde(path: &str, home_dir: &str) -> String {
     }
 }
 
-/// Expand leading `~` to `home_dir` in all mountpoint keys and host-path values.
+/// Expand leading `~` to `home_dir` in all volume keys and host-path values.
 ///
 /// Operates on the raw figment `Dict` so that expansion happens before merging. This ensures
 /// that `~/.ssh` and `/home/alice/.ssh` from different config sources are treated as the same
-/// mountpoint during priority resolution.
-fn expand_tildes_in_mountpoints(dict: &mut Dict, home_dir: &str) {
-    let Some(Value::Dict(tag, mountpoints)) = dict.remove("mountpoints") else {
+/// volume during priority resolution.
+fn expand_tildes_in_volumes(dict: &mut Dict, home_dir: &str) {
+    let Some(Value::Dict(tag, volumes)) = dict.remove("volumes") else {
         return;
     };
-    let expanded: Dict = mountpoints
+    let expanded: Dict = volumes
         .into_iter()
         .map(|(key, value)| {
             let expanded_key = expand_tilde(&key, home_dir);
@@ -90,7 +90,7 @@ fn expand_tildes_in_mountpoints(dict: &mut Dict, home_dir: &str) {
             (expanded_key, expanded_value)
         })
         .collect();
-    dict.insert(String::from("mountpoints"), Value::Dict(tag, expanded));
+    dict.insert(String::from("volumes"), Value::Dict(tag, expanded));
 }
 
 /// Merge `incoming` into `base` using controlled-depth semantics.

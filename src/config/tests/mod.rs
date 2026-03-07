@@ -2,11 +2,11 @@ mod empty_string_removal;
 mod environment_variables;
 mod get_container_name;
 mod get_image_name;
-mod mountpoints;
 mod tilde_expansion;
+mod volumes;
 
 use super::{
-    CliArgs, Command, Config, ConfigError, EnvironmentVariableEntry, MountpointEntry, get_config,
+    CliArgs, Command, Config, ConfigError, EnvironmentVariableEntry, VolumeEntry, get_config,
 };
 use std::{collections::HashMap, env, fs, path::Path};
 use tempfile::tempdir;
@@ -32,7 +32,7 @@ impl CliArgs {
         force_rebuild: bool,
         no_build_cache: bool,
         no_rebuild: bool,
-        mountpoints: Vec<String>,
+        volumes: Vec<String>,
         environment_variables: Vec<String>,
         pre_run: Option<String>,
     ) -> Self {
@@ -46,7 +46,7 @@ impl CliArgs {
             force_rebuild,
             no_build_cache,
             no_rebuild,
-            mountpoints,
+            volumes,
             environment_variables,
             pre_run,
             command,
@@ -97,7 +97,7 @@ fn make_config() -> Config {
         force_rebuild: false,
         no_build_cache: false,
         no_rebuild: false,
-        mountpoints: HashMap::new(),
+        volumes: HashMap::new(),
         environment_variables: HashMap::new(),
         pre_run: None,
     }

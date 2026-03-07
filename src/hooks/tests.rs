@@ -26,9 +26,9 @@ mod parse_pre_run_output_tests {
 
     #[test]
     fn parses_multiline_array() {
-        let output = "[\n  \"--mount\",\n  \"/host:/container\",\n]";
+        let output = "[\n  \"--volume\",\n  \"/host:/container\",\n]";
         let result = parse_pre_run_output(output).expect("Should parse successfully");
-        assert_eq!(result, vec!["--mount", "/host:/container"]);
+        assert_eq!(result, vec!["--volume", "/host:/container"]);
     }
 
     #[test]

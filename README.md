@@ -35,7 +35,7 @@ lowest to highest priority:
 | `force_rebuild`         | `false`                                            | Rebuild unconditionally, bypassing the staleness check.                                                           |
 | `no_build_cache`        | `false`                                            | Pass `--no-cache` to `docker build`.                                                                              |
 | `no_rebuild`            | `false`                                            | Skip the build entirely. Errors if no image exists yet.                                                           |
-| `mountpoints`           | _(empty)_                                          | Host-to-container volume mounts. See [Mountpoints](#mountpoints).                                                 |
+| `volumes`               | _(empty)_                                          | Host-to-container volume mounts. See [Volumes](#volumes).                                                         |
 | `environment_variables` | _(empty)_                                          | Environment variables for the container. See [Container environment variables](#container-environment-variables). |
 | `pre_run`               | _(none)_                                           | Path to an executable to run before `docker run`. See [Pre-run hook](#pre-run-hook).                              |
 
@@ -48,41 +48,41 @@ config can override it with `target = ""` to build without a target. The same
 works via environment variables (`AGENTCONTAINER_TARGET=""`) and CLI
 (`--target ""`).
 
-### Mountpoints
+### Volumes
 
-The `mountpoints` table maps container paths to host paths. In TOML, each key
-is a container path and the value is either:
+The `volumes` table maps container paths to host paths. In TOML, each key is a
+container path and the value is either:
 
 - A string: an explicit host path to mount at the container path.
 - `true`: mount at the same path in the container as on the host (the key is
   used as both host and container path).
-- `false`: remove a mountpoint inherited from a lower-priority config source.
+- `false`: remove a volume inherited from a lower-priority config source.
 
 A leading `~` in container-path keys and host-path values is expanded to the
 user's home directory before config sources are merged. This means `~/.ssh` and
-`/home/alice/.ssh` from different sources are treated as the same mountpoint
-during priority resolution. Only `~` alone or `~/…` is expanded; `~user/…` and
+`/home/alice/.ssh` from different sources are treated as the same volume during
+priority resolution. Only `~` alone or `~/…` is expanded; `~user/…` and
 embedded tildes are left untouched.
 
 ```toml
-[mountpoints]
+[volumes]
 "/workspace" = "~/projects/myproject"
 "/data" = "/mnt/shared-data"
 "~/.ssh" = true                       # mount at the same path inside the container
-"/unwanted" = false                   # suppress a mountpoint defined in a lower-priority source
+"/unwanted" = false                   # suppress a volume defined in a lower-priority source
 ```
 
-On the CLI, use `--mountpoint` (repeatable):
+On the CLI, use `--volume` (repeatable):
 
 ```sh
 # Mount a host path into the container.
-agentcontainer build --mountpoint '~/projects/myproject:/workspace'
+agentcontainer build --volume '~/projects/myproject:/workspace'
 
 # Mount at the same path inside the container (same-path shorthand).
-agentcontainer build --mountpoint /home/alice/.ssh
+agentcontainer build --volume /home/alice/.ssh
 
-# Remove a mountpoint inherited from config files.
-agentcontainer build --mountpoint '!/unwanted'
+# Remove a volume inherited from config files.
+agentcontainer build --volume '!/unwanted'
 ```
 
 ### Container environment variables
@@ -189,7 +189,7 @@ build_context = "."
 project_name = "myproject"
 username = "alice"
 
-[mountpoints]
+[volumes]
 "/workspace" = "~/projects/myproject"
 "~/.ssh" = true                       # same path on host and in container
 
@@ -207,7 +207,7 @@ TOML. For example:
 ```sh
 AGENTCONTAINER_DOCKERFILE=".agentcontainer/Dockerfile"
 AGENTCONTAINER_BUILD_CONTEXT="."
-AGENTCONTAINER_MOUNTPOINTS='{"/workspace" = "~/projects/myproject", "~/.ssh" = true}'
+AGENTCONTAINER_VOLUMES='{"/workspace" = "~/projects/myproject", "~/.ssh" = true}'
 AGENTCONTAINER_ENVIRONMENT_VARIABLES='{EDITOR = "nvim", SSH_AUTH_SOCK = true}'
 AGENTCONTAINER_ALLOW_STALE=true # or `false`
 ```
@@ -280,11 +280,11 @@ The container is started with:
 - **`--rm`**: the container is automatically removed on exit.
 - **UID/GID mapping**: the container runs as the current user and group, with
   group `0` added via `--group-add`.
-- **Current directory mount**: the working directory is mounted into the
+- **Current directory volume**: the working directory is mounted into the
   container at the same path and set as the container's working directory.
-- **Git worktree mount**: if the current directory is a linked Git worktree,
+- **Git worktree volume**: if the current directory is a linked Git worktree,
   the main worktree root is also mounted so that Git objects are accessible.
-- **Configured mountpoints and environment variables**: as defined in the
+- **Configured volumes and environment variables**: as defined in the
   configuration.
 - **TTY mode**: `-t` (allocate pseudo-TTY) and `-i` (keep stdin open) are only
   added when standard input is a TTY. This means piped or scripted invocations

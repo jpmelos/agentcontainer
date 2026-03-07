@@ -1,4 +1,4 @@
-use super::{CliArgs, Command, MountpointEntry, default_cli_args, get_config, write_file};
+use super::{CliArgs, Command, VolumeEntry, default_cli_args, get_config, write_file};
 use std::env;
 use tempfile::tempdir;
 
@@ -9,7 +9,7 @@ fn tilde_in_toml_host_path_is_expanded_to_home_dir() {
     write_file(
         &cwd.path().join(".agentcontainer/config.toml"),
         r#"
-        [mountpoints]
+        [volumes]
         "/container" = "~/host-data"
         "#,
     );
@@ -23,8 +23,8 @@ fn tilde_in_toml_host_path_is_expanded_to_home_dir() {
     let (_, config) = get_config(home_dir_str, &cli_args).expect("`get_config` failed");
 
     assert!(matches!(
-        config.mountpoints.get("/container"),
-        Some(MountpointEntry::Active(host)) if host == &format!("{home_dir_str}/host-data")
+        config.volumes.get("/container"),
+        Some(VolumeEntry::Active(host)) if host == &format!("{home_dir_str}/host-data")
     ));
 }
 
@@ -35,7 +35,7 @@ fn tilde_in_toml_container_path_key_is_expanded_to_home_dir() {
     write_file(
         &cwd.path().join(".agentcontainer/config.toml"),
         r#"
-        [mountpoints]
+        [volumes]
         "~/.ssh" = "/host/.ssh"
         "#,
     );
@@ -50,8 +50,8 @@ fn tilde_in_toml_container_path_key_is_expanded_to_home_dir() {
 
     let expected_container_path = format!("{home_dir_str}/.ssh");
     assert!(matches!(
-        config.mountpoints.get(expected_container_path.as_str()),
-        Some(MountpointEntry::Active(host)) if host == "/host/.ssh"
+        config.volumes.get(expected_container_path.as_str()),
+        Some(VolumeEntry::Active(host)) if host == "/host/.ssh"
     ));
 }
 
@@ -62,7 +62,7 @@ fn tilde_in_toml_same_path_key_is_expanded_to_home_dir() {
     write_file(
         &cwd.path().join(".agentcontainer/config.toml"),
         r#"
-        [mountpoints]
+        [volumes]
         "~/.ssh" = true
         "#,
     );
@@ -78,11 +78,11 @@ fn tilde_in_toml_same_path_key_is_expanded_to_home_dir() {
     let expected_path = format!("{home_dir_str}/.ssh");
     assert!(
         matches!(
-            config.mountpoints.get(expected_path.as_str()),
-            Some(MountpointEntry::SamePath)
+            config.volumes.get(expected_path.as_str()),
+            Some(VolumeEntry::SamePath)
         ),
         "Expected `SamePath` at {expected_path:?}, got: {:?}",
-        config.mountpoints
+        config.volumes
     );
 }
 
@@ -93,7 +93,7 @@ fn bare_tilde_in_host_path_is_expanded_to_home_dir() {
     write_file(
         &cwd.path().join(".agentcontainer/config.toml"),
         r#"
-        [mountpoints]
+        [volumes]
         "/home" = "~"
         "#,
     );
@@ -107,8 +107,8 @@ fn bare_tilde_in_host_path_is_expanded_to_home_dir() {
     let (_, config) = get_config(home_dir_str, &cli_args).expect("`get_config` failed");
 
     assert!(matches!(
-        config.mountpoints.get("/home"),
-        Some(MountpointEntry::Active(host)) if host == home_dir_str
+        config.volumes.get("/home"),
+        Some(VolumeEntry::Active(host)) if host == home_dir_str
     ));
 }
 
@@ -138,8 +138,8 @@ fn tilde_in_cli_host_path_is_expanded_to_home_dir() {
     let (_, config) = get_config(home_dir_str, &cli_args).expect("`get_config` failed");
 
     assert!(matches!(
-        config.mountpoints.get("/container"),
-        Some(MountpointEntry::Active(host)) if host == &format!("{home_dir_str}/projects")
+        config.volumes.get("/container"),
+        Some(VolumeEntry::Active(host)) if host == &format!("{home_dir_str}/projects")
     ));
 }
 
@@ -150,7 +150,7 @@ fn tilde_in_both_paths_is_expanded_to_home_dir() {
     write_file(
         &cwd.path().join(".agentcontainer/config.toml"),
         r#"
-        [mountpoints]
+        [volumes]
         "~/.config" = "~/.config"
         "#,
     );
@@ -165,8 +165,8 @@ fn tilde_in_both_paths_is_expanded_to_home_dir() {
 
     let expected_path = format!("{home_dir_str}/.config");
     assert!(matches!(
-        config.mountpoints.get(expected_path.as_str()),
-        Some(MountpointEntry::Active(host)) if host == &expected_path
+        config.volumes.get(expected_path.as_str()),
+        Some(VolumeEntry::Active(host)) if host == &expected_path
     ));
 }
 
@@ -177,7 +177,7 @@ fn embedded_tilde_is_not_expanded() {
     write_file(
         &cwd.path().join(".agentcontainer/config.toml"),
         r#"
-        [mountpoints]
+        [volumes]
         "/container" = "/host/~data"
         "#,
     );
@@ -194,8 +194,8 @@ fn embedded_tilde_is_not_expanded() {
     .expect("`get_config` failed");
 
     assert!(matches!(
-        config.mountpoints.get("/container"),
-        Some(MountpointEntry::Active(host)) if host == "/host/~data"
+        config.volumes.get("/container"),
+        Some(VolumeEntry::Active(host)) if host == "/host/~data"
     ));
 }
 
@@ -213,7 +213,7 @@ fn higher_priority_literal_path_overrides_lower_priority_tilde_path() {
     write_file(
         &cwd.path().join(".agentcontainer/config.toml"),
         r#"
-        [mountpoints]
+        [volumes]
         "~/.ssh" = "/low-priority-host"
         "#,
     );
@@ -222,7 +222,7 @@ fn higher_priority_literal_path_overrides_lower_priority_tilde_path() {
         &cwd.path().join(".agentcontainer/config.local.toml"),
         &format!(
             r#"
-            [mountpoints]
+            [volumes]
             "{home_dir_str}/.ssh" = "/high-priority-host"
             "#
         ),
@@ -235,11 +235,11 @@ fn higher_priority_literal_path_overrides_lower_priority_tilde_path() {
     let expected_key = format!("{home_dir_str}/.ssh");
     assert!(
         matches!(
-            config.mountpoints.get(expected_key.as_str()),
-            Some(MountpointEntry::Active(host)) if host == "/high-priority-host"
+            config.volumes.get(expected_key.as_str()),
+            Some(VolumeEntry::Active(host)) if host == "/high-priority-host"
         ),
         "Expected higher-priority literal path to win, got: {:?}",
-        config.mountpoints
+        config.volumes
     );
 }
 
@@ -258,7 +258,7 @@ fn higher_priority_tilde_path_overrides_lower_priority_literal_path() {
         &cwd.path().join(".agentcontainer/config.toml"),
         &format!(
             r#"
-            [mountpoints]
+            [volumes]
             "{home_dir_str}/.ssh" = "/low-priority-host"
             "#
         ),
@@ -267,7 +267,7 @@ fn higher_priority_tilde_path_overrides_lower_priority_literal_path() {
     write_file(
         &cwd.path().join(".agentcontainer/config.local.toml"),
         r#"
-        [mountpoints]
+        [volumes]
         "~/.ssh" = "/high-priority-host"
         "#,
     );
@@ -279,11 +279,11 @@ fn higher_priority_tilde_path_overrides_lower_priority_literal_path() {
     let expected_key = format!("{home_dir_str}/.ssh");
     assert!(
         matches!(
-            config.mountpoints.get(expected_key.as_str()),
-            Some(MountpointEntry::Active(host)) if host == "/high-priority-host"
+            config.volumes.get(expected_key.as_str()),
+            Some(VolumeEntry::Active(host)) if host == "/high-priority-host"
         ),
         "Expected higher-priority tilde path to win, got: {:?}",
-        config.mountpoints
+        config.volumes
     );
 }
 
@@ -294,7 +294,7 @@ fn tilde_user_syntax_is_not_expanded() {
     write_file(
         &cwd.path().join(".agentcontainer/config.toml"),
         r#"
-        [mountpoints]
+        [volumes]
         "/container" = "~alice/data"
         "#,
     );
@@ -311,7 +311,7 @@ fn tilde_user_syntax_is_not_expanded() {
     .expect("`get_config` failed");
 
     assert!(matches!(
-        config.mountpoints.get("/container"),
-        Some(MountpointEntry::Active(host)) if host == "~alice/data"
+        config.volumes.get("/container"),
+        Some(VolumeEntry::Active(host)) if host == "~alice/data"
     ));
 }

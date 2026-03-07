@@ -1,6 +1,6 @@
 //! Run the agent container.
 
-use crate::config::{Config, EnvironmentVariableEntry, MountpointEntry};
+use crate::config::{Config, EnvironmentVariableEntry, VolumeEntry};
 use crate::utils::docker::DockerBackend;
 use crate::utils::git::GitContext;
 use std::convert::Infallible;
@@ -110,29 +110,29 @@ fn build_docker_run_args(
     args.push(String::from("-w"));
     args.push(String::from(current_dir));
 
-    // Automatic mount: current directory.
+    // Automatic volume: current directory.
     args.push(String::from("-v"));
     args.push(format!("{current_dir}:{current_dir}"));
 
-    // Worktree mount, if present.
+    // Worktree volume, if present.
     if let Some(worktree) = main_worktree {
         let worktree_str = worktree.display();
         args.push(String::from("-v"));
         args.push(format!("{worktree_str}:{worktree_str}"));
     }
 
-    // Config mountpoints.
-    for (container_path, entry) in &config.mountpoints {
+    // Config volumes.
+    for (container_path, entry) in &config.volumes {
         match *entry {
-            MountpointEntry::Active(ref host_path) => {
+            VolumeEntry::Active(ref host_path) => {
                 args.push(String::from("-v"));
                 args.push(format!("{host_path}:{container_path}"));
             }
-            MountpointEntry::SamePath => {
+            VolumeEntry::SamePath => {
                 args.push(String::from("-v"));
                 args.push(format!("{container_path}:{container_path}"));
             }
-            MountpointEntry::Remove => {
+            VolumeEntry::Remove => {
                 unreachable!(
                     "`Remove` entries are stripped by `clean_config` before `run` is called."
                 )

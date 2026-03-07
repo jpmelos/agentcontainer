@@ -30,7 +30,7 @@ fn make_config(
         force_rebuild,
         no_build_cache: false,
         no_rebuild,
-        mountpoints: HashMap::new(),
+        volumes: HashMap::new(),
         environment_variables: HashMap::new(),
         pre_run: None,
     }

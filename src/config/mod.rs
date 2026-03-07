@@ -43,7 +43,7 @@ fn default_username() -> String {
     whoami::username().unwrap_or_else(|_| String::from("unknown"))
 }
 
-/// A mountpoint entry: an explicit host path, a same-path shorthand, or a removal sentinel.
+/// A volume entry: an explicit host path, a same-path shorthand, or a removal sentinel.
 ///
 /// In TOML and environment variables: a string = host path; `true` = mount at the same path as
 /// the container path key; `false` = remove.
@@ -51,7 +51,7 @@ fn default_username() -> String {
 /// On the CLI: `"/host:/container"` = explicit mount; `"/path"` (no colon) = same-path shorthand;
 /// `"!/container"` = remove.
 #[derive(Debug, Clone)]
-pub(crate) enum MountpointEntry {
+pub(crate) enum VolumeEntry {
     /// The host path to mount at the container path key.
     Active(String),
     /// Mount the container path key at the same path on the host.
@@ -60,7 +60,7 @@ pub(crate) enum MountpointEntry {
     Remove,
 }
 
-impl Serialize for MountpointEntry {
+impl Serialize for VolumeEntry {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match *self {
             Self::Active(ref host_path) => serializer.serialize_str(host_path),
@@ -70,12 +70,12 @@ impl Serialize for MountpointEntry {
     }
 }
 
-impl<'de> Deserialize<'de> for MountpointEntry {
+impl<'de> Deserialize<'de> for VolumeEntry {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct MountpointEntryVisitor;
+        struct VolumeEntryVisitor;
 
-        impl Visitor<'_> for MountpointEntryVisitor {
-            type Value = MountpointEntry;
+        impl Visitor<'_> for VolumeEntryVisitor {
+            type Value = VolumeEntry;
 
             fn expecting(&self, formatter: &mut Formatter<'_>) -> FmtResult {
                 formatter.write_str(
@@ -84,23 +84,23 @@ impl<'de> Deserialize<'de> for MountpointEntry {
             }
 
             fn visit_str<E: DeError>(self, v: &str) -> Result<Self::Value, E> {
-                Ok(MountpointEntry::Active(String::from(v)))
+                Ok(VolumeEntry::Active(String::from(v)))
             }
 
             fn visit_string<E: DeError>(self, v: String) -> Result<Self::Value, E> {
-                Ok(MountpointEntry::Active(v))
+                Ok(VolumeEntry::Active(v))
             }
 
             fn visit_bool<E: DeError>(self, v: bool) -> Result<Self::Value, E> {
                 if v {
-                    Ok(MountpointEntry::SamePath)
+                    Ok(VolumeEntry::SamePath)
                 } else {
-                    Ok(MountpointEntry::Remove)
+                    Ok(VolumeEntry::Remove)
                 }
             }
         }
 
-        deserializer.deserialize_any(MountpointEntryVisitor)
+        deserializer.deserialize_any(VolumeEntryVisitor)
     }
 }
 
@@ -211,9 +211,9 @@ pub(crate) struct Config {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub(crate) no_rebuild: bool,
 
-    /// Mountpoints to set up in the container.
+    /// Volumes to set up in the container.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-    pub(crate) mountpoints: HashMap<String, MountpointEntry>,
+    pub(crate) volumes: HashMap<String, VolumeEntry>,
 
     /// Environment variables to pass to the container.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
@@ -317,9 +317,9 @@ pub(crate) struct CliArgs {
     #[arg(long)]
     no_rebuild: bool,
 
-    /// Mountpoint as "host:container", "/path" (same path), or "!/path" (remove). Repeatable.
-    #[arg(long = "mountpoint")]
-    mountpoints: Vec<String>,
+    /// Volume as "host:container", "/path" (same path), or "!/path" (remove). Repeatable.
+    #[arg(long = "volume")]
+    volumes: Vec<String>,
 
     /// Environment variable as "KEY=value", "KEY" (inherit), or "!KEY" (remove). Repeatable.
     #[arg(long = "environment-variable")]
@@ -376,20 +376,18 @@ pub(crate) enum ConfigError {
         /// The raw target value that failed slugification.
         target: String,
     },
-    /// A mountpoint value could not be parsed (bad CLI format).
+    /// A volume value could not be parsed (bad CLI format).
     #[error(
-        "Invalid mountpoint value {value:?}: expected \"/host:/container\", \"/path\", or \
+        "Invalid volume value {value:?}: expected \"/host:/container\", \"/path\", or \
          \"!/container\""
     )]
-    InvalidMountpoint {
+    InvalidVolume {
         /// The raw value that failed parsing.
         value: String,
     },
-    /// A mountpoint container path is not absolute.
-    #[error(
-        "Invalid mountpoint path {path:?}: container paths must be absolute (start with \"/\")"
-    )]
-    InvalidMountpointPath {
+    /// A volume container path is not absolute.
+    #[error("Invalid volume path {path:?}: container paths must be absolute (start with \"/\")")]
+    InvalidVolumePath {
         /// The container path that is not absolute.
         path: String,
     },
@@ -464,8 +462,8 @@ pub(crate) fn get_config<'cli_args>(
         }};
     }
 
-    // Parse CLI `--mountpoint` args into a map.
-    let cli_mountpoints = parse_cli_mountpoints(&cli_args.mountpoints)?;
+    // Parse CLI `--volume` args into a map.
+    let cli_volumes = parse_cli_volumes(&cli_args.volumes)?;
 
     // Parse CLI `--environment-variable` args into a map.
     let cli_env_vars = parse_cli_environment_variables(&cli_args.environment_variables)?;
@@ -481,19 +479,19 @@ pub(crate) fn get_config<'cli_args>(
         Box::new(Env::prefixed("AGENTCONTAINER_")),
     ];
 
-    // CLI dict args (mountpoints and environment_variables) are combined into a single provider so
+    // CLI dict args (volumes and environment_variables) are combined into a single provider so
     // they travel together at the same priority level.
     {
         // We build a combined owned config struct to hold both maps so the provider satisfies the
         // `'static` lifetime bound required by `Box<dyn Provider>`.
         #[derive(Serialize)]
         struct CliDictArgs {
-            mountpoints: HashMap<String, MountpointEntry>,
+            volumes: HashMap<String, VolumeEntry>,
             environment_variables: HashMap<String, EnvironmentVariableEntry>,
         }
-        if !cli_mountpoints.is_empty() || !cli_env_vars.is_empty() {
+        if !cli_volumes.is_empty() || !cli_env_vars.is_empty() {
             let cli_dict_args = CliDictArgs {
-                mountpoints: cli_mountpoints,
+                volumes: cli_volumes,
                 environment_variables: cli_env_vars,
             };
             providers.push(Box::new(Serialized::defaults(cli_dict_args)));
@@ -530,38 +528,36 @@ pub(crate) fn get_config<'cli_args>(
     Ok((&cli_args.command, config))
 }
 
-/// Parse the list of `--mountpoint` CLI arguments into a `HashMap<String, MountpointEntry>`.
+/// Parse the list of `--volume` CLI arguments into a `HashMap<String, VolumeEntry>`.
 ///
 /// Accepted formats:
 /// - `"/host:/container"` → `("/container", Active("/host"))`
 /// - `"/path"` (no colon) → `("/path", SamePath)` — mount at the same path in the container.
 /// - `"!/container"` → `("/container", Remove)`
-fn parse_cli_mountpoints(
-    raw_mountpoints: &[String],
-) -> Result<HashMap<String, MountpointEntry>, ConfigError> {
-    let mut mountpoints = HashMap::new();
-    for raw in raw_mountpoints {
+fn parse_cli_volumes(raw_volumes: &[String]) -> Result<HashMap<String, VolumeEntry>, ConfigError> {
+    let mut volumes = HashMap::new();
+    for raw in raw_volumes {
         if raw.is_empty() {
-            return Err(ConfigError::InvalidMountpoint { value: raw.clone() });
+            return Err(ConfigError::InvalidVolume { value: raw.clone() });
         }
         if let Some(container_path) = raw.strip_prefix('!') {
             if container_path.is_empty() || container_path.contains(':') {
-                return Err(ConfigError::InvalidMountpoint { value: raw.clone() });
+                return Err(ConfigError::InvalidVolume { value: raw.clone() });
             }
-            mountpoints.insert(String::from(container_path), MountpointEntry::Remove);
+            volumes.insert(String::from(container_path), VolumeEntry::Remove);
         } else if let Some((host_path, container_path)) = raw.rsplit_once(':') {
             if host_path.is_empty() || host_path.contains(':') || container_path.is_empty() {
-                return Err(ConfigError::InvalidMountpoint { value: raw.clone() });
+                return Err(ConfigError::InvalidVolume { value: raw.clone() });
             }
-            mountpoints.insert(
+            volumes.insert(
                 String::from(container_path),
-                MountpointEntry::Active(String::from(host_path)),
+                VolumeEntry::Active(String::from(host_path)),
             );
         } else {
-            mountpoints.insert(raw.clone(), MountpointEntry::SamePath);
+            volumes.insert(raw.clone(), VolumeEntry::SamePath);
         }
     }
-    Ok(mountpoints)
+    Ok(volumes)
 }
 
 /// Parse the list of `--environment-variable` CLI arguments into a
@@ -644,9 +640,9 @@ fn validate_config(config: &Config) -> Result<(), ConfigError> {
         });
     }
 
-    for container_path in config.mountpoints.keys() {
+    for container_path in config.volumes.keys() {
         if !container_path.starts_with('/') {
-            return Err(ConfigError::InvalidMountpointPath {
+            return Err(ConfigError::InvalidVolumePath {
                 path: container_path.clone(),
             });
         }
@@ -671,8 +667,8 @@ fn validate_config(config: &Config) -> Result<(), ConfigError> {
 /// layer can set either to `""` to suppress a value inherited from a lower-priority layer.
 fn clean_config(config: &mut Config) {
     config
-        .mountpoints
-        .retain(|_, entry| !matches!(entry, MountpointEntry::Remove));
+        .volumes
+        .retain(|_, entry| !matches!(entry, VolumeEntry::Remove));
     config
         .environment_variables
         .retain(|_, entry| !matches!(entry, EnvironmentVariableEntry::Remove));

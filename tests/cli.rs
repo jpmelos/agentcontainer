@@ -53,7 +53,7 @@ mod tests {
             .env_remove("AGENTCONTAINER_FORCE_REBUILD")
             .env_remove("AGENTCONTAINER_NO_BUILD_CACHE")
             .env_remove("AGENTCONTAINER_NO_REBUILD")
-            .env_remove("AGENTCONTAINER_MOUNTPOINTS")
+            .env_remove("AGENTCONTAINER_VOLUMES")
             .env_remove("AGENTCONTAINER_ENVIRONMENT_VARIABLES")
             .env_remove("AGENTCONTAINER_PRE_RUN")
             .current_dir(cwd.path());

@@ -1,5 +1,5 @@
 use super::build_docker_run_args;
-use crate::config::{Config, EnvironmentVariableEntry, MountpointEntry};
+use crate::config::{Config, EnvironmentVariableEntry, VolumeEntry};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -19,7 +19,7 @@ fn make_config() -> Config {
         force_rebuild: false,
         no_build_cache: false,
         no_rebuild: false,
-        mountpoints: HashMap::new(),
+        volumes: HashMap::new(),
         environment_variables: HashMap::new(),
         pre_run: None,
     }
@@ -185,7 +185,7 @@ mod build_docker_run_args {
     }
 
     #[test]
-    fn includes_current_dir_mount() {
+    fn includes_current_dir_volume() {
         let config = make_config();
         let args = build_docker_run_args(
             &config,
@@ -201,12 +201,12 @@ mod build_docker_run_args {
 
         assert!(
             has_flag_pair(&args, "-v", "/home/user/project:/home/user/project"),
-            "Current directory mount not found in args: {args:?}"
+            "Current directory volume not found in args: {args:?}"
         );
     }
 
     #[test]
-    fn includes_worktree_mount_when_present() {
+    fn includes_worktree_volume_when_present() {
         let config = make_config();
         let worktree = PathBuf::from("/home/user/main-repo");
         let args = build_docker_run_args(
@@ -223,12 +223,12 @@ mod build_docker_run_args {
 
         assert!(
             has_flag_pair(&args, "-v", "/home/user/main-repo:/home/user/main-repo"),
-            "Worktree mount not found in args: {args:?}"
+            "Worktree volume not found in args: {args:?}"
         );
     }
 
     #[test]
-    fn no_worktree_mount_when_absent() {
+    fn no_worktree_volume_when_absent() {
         let config = make_config();
         let args = build_docker_run_args(
             &config,
@@ -251,11 +251,11 @@ mod build_docker_run_args {
     }
 
     #[test]
-    fn includes_config_mountpoints() {
+    fn includes_config_volumes() {
         let mut config = make_config();
-        config.mountpoints.insert(
+        config.volumes.insert(
             String::from("/container/path"),
-            MountpointEntry::Active(String::from("/host/path")),
+            VolumeEntry::Active(String::from("/host/path")),
         );
         let args = build_docker_run_args(
             &config,
@@ -271,16 +271,16 @@ mod build_docker_run_args {
 
         assert!(
             has_flag_pair(&args, "-v", "/host/path:/container/path"),
-            "Config mountpoint not found in args: {args:?}"
+            "Config volume not found in args: {args:?}"
         );
     }
 
     #[test]
-    fn includes_same_path_mountpoint() {
+    fn includes_same_path_volume() {
         let mut config = make_config();
         config
-            .mountpoints
-            .insert(String::from("/shared/data"), MountpointEntry::SamePath);
+            .volumes
+            .insert(String::from("/shared/data"), VolumeEntry::SamePath);
         let args = build_docker_run_args(
             &config,
             1000,
@@ -295,7 +295,7 @@ mod build_docker_run_args {
 
         assert!(
             has_flag_pair(&args, "-v", "/shared/data:/shared/data"),
-            "Same-path mountpoint not found in args: {args:?}"
+            "Same-path volume not found in args: {args:?}"
         );
     }
 
@@ -376,7 +376,7 @@ mod build_docker_run_args {
     fn pre_run_extra_args_appear_before_image_name() {
         let config = make_config();
         let pre_run_extra_args = vec![
-            String::from("--mount"),
+            String::from("--volume"),
             String::from("/host/path:/container/path"),
         ];
         let args = build_docker_run_args(
@@ -400,7 +400,7 @@ mod build_docker_run_args {
         // The two extra args should appear right before the image name.
         assert_eq!(
             args[image_position - 2],
-            "--mount",
+            "--volume",
             "Pre-run extra args should appear before the image name: {args:?}"
         );
         assert_eq!(
