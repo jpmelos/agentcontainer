@@ -37,6 +37,7 @@ lowest to highest priority:
 | `no_rebuild`            | `false`                                            | Skip the build entirely. Errors if no image exists yet.                                                           |
 | `mountpoints`           | _(empty)_                                          | Host-to-container volume mounts. See [Mountpoints](#mountpoints).                                                 |
 | `environment_variables` | _(empty)_                                          | Environment variables for the container. See [Container environment variables](#container-environment-variables). |
+| `pre_run`               | _(none)_                                           | Path to an executable to run before `docker run`. See [Pre-run hook](#pre-run-hook).                              |
 
 `force_rebuild` and `no_rebuild` are mutually exclusive.
 
@@ -103,6 +104,41 @@ agentcontainer build --environment-variable '!OLD_VAR'
 Variable keys must be valid POSIX identifiers: start with a letter or
 underscore, followed by ASCII letters, digits, or underscores.
 
+### Pre-run hook
+
+The `pre_run` option specifies a path to an executable that runs before
+`docker run`. Its stdout is parsed as a TOML array of strings, and these
+strings are injected as extra arguments to the `docker run` command (after all
+built-in flags, but before the image name).
+
+This provides a way to dynamically compute Docker flags at runtime based on the
+host environment.
+
+The hook must:
+
+- Exit with status 0.
+- Print a valid TOML array of strings to stdout (e.g. `["--network", "host"]`).
+- Produce valid UTF-8 output.
+
+Example hook script:
+
+```sh
+#!/bin/sh
+echo '["--network", "host"]'
+```
+
+In TOML configuration:
+
+```toml
+pre_run = "./hooks/pre-run.sh"
+```
+
+On the CLI:
+
+```sh
+agentcontainer run --pre-run ./hooks/pre-run.sh
+```
+
 ### Image naming
 
 The Docker image tag is derived from the resolved configuration:
@@ -162,6 +198,7 @@ AGENTCONTAINER_PROJECT_NAME="myproject"
 AGENTCONTAINER_USERNAME="alice"
 AGENTCONTAINER_MOUNTPOINTS='{"/workspace" = "/home/alice/projects/myproject", "/home/alice/.ssh" = true}'
 AGENTCONTAINER_ENVIRONMENT_VARIABLES='{EDITOR = "nvim", SSH_AUTH_SOCK = true}'
+AGENTCONTAINER_PRE_RUN="./hooks/pre-run.sh"
 ```
 
 ## Commands

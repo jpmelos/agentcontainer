@@ -32,6 +32,7 @@ impl CliArgs {
         no_rebuild: bool,
         mountpoints: Vec<String>,
         environment_variables: Vec<String>,
+        pre_run: Option<String>,
     ) -> Self {
         Self {
             dockerfile,
@@ -45,6 +46,7 @@ impl CliArgs {
             no_rebuild,
             mountpoints,
             environment_variables,
+            pre_run,
             command,
         }
     }
@@ -77,6 +79,7 @@ fn default_cli_args(command: Command) -> CliArgs {
         false,
         vec![],
         vec![],
+        None,
     )
 }
 
@@ -94,6 +97,7 @@ fn make_config() -> Config {
         no_rebuild: false,
         mountpoints: HashMap::new(),
         environment_variables: HashMap::new(),
+        pre_run: None,
     }
 }
 
@@ -243,6 +247,7 @@ mod configuration_sources_are_read {
             false,
             vec![],
             vec![],
+            None,
         );
 
         let (_, config) = get_config(
@@ -389,6 +394,7 @@ mod configuration_sources_priority_order {
             false,
             vec![],
             vec![],
+            None,
         );
 
         let (_, config) = get_config(
@@ -442,6 +448,7 @@ mod configuration_sources_priority_order {
             false,
             vec![],
             vec![],
+            None,
         );
 
         let (_, config) = get_config(
@@ -704,6 +711,7 @@ mod validation {
             false,
             vec![],
             vec![],
+            None,
         );
 
         let error = get_config(
@@ -737,6 +745,7 @@ mod validation {
             false,
             vec![],
             vec![],
+            None,
         );
 
         let result = get_config(
@@ -769,6 +778,7 @@ mod validation {
             false,
             vec![],
             vec![],
+            None,
         );
 
         let error = get_config(
@@ -802,6 +812,7 @@ mod validation {
             true, // no_rebuild
             vec![],
             vec![],
+            None,
         );
 
         let error = get_config(

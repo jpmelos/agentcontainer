@@ -218,6 +218,11 @@ pub(crate) struct Config {
     /// Environment variables to pass to the container.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub(crate) environment_variables: HashMap<String, EnvironmentVariableEntry>,
+
+    /// Path to an executable to run before `docker run`. Its stdout is parsed as a TOML list of
+    /// extra arguments to pass to the `docker run` command.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) pre_run: Option<String>,
 }
 
 impl Config {
@@ -319,6 +324,11 @@ pub(crate) struct CliArgs {
     /// Environment variable as "KEY=value", "KEY" (inherit), or "!KEY" (remove). Repeatable.
     #[arg(long = "environment-variable")]
     environment_variables: Vec<String>,
+
+    /// Path to an executable to run before `docker run`. Its stdout is parsed as a TOML list of
+    /// extra arguments to pass to the `docker run` command (e.g. `["--network", "host"]`).
+    #[arg(long)]
+    pre_run: Option<String>,
 
     #[command(subcommand)]
     command: Command,
@@ -498,7 +508,8 @@ pub(crate) fn get_config<'cli_args>(
         build_context,
         project_name,
         username,
-        target
+        target,
+        pre_run,
     );
     merge_bool_cli_args!(
         cli_args,

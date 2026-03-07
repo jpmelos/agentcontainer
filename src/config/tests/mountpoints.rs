@@ -246,6 +246,7 @@ mod parsing_cli_args {
             false,
             vec![String::from("/host:/container")],
             vec![],
+            None,
         );
 
         let (_, config) = get_config(
@@ -279,6 +280,7 @@ mod parsing_cli_args {
             false,
             vec![String::from("/same-path")],
             vec![],
+            None,
         );
 
         let (_, config) = get_config(
@@ -325,6 +327,7 @@ mod parsing_cli_args {
             false,
             vec![String::from("!/container")],
             vec![],
+            None,
         );
 
         let (_, config) = get_config(
@@ -355,6 +358,7 @@ mod parsing_cli_args {
             false,
             vec![String::from("relative-host:/container")],
             vec![],
+            None,
         );
 
         let (_, config) = get_config(
@@ -401,6 +405,7 @@ mod priority {
             false,
             vec![String::from("/host-from-cli:/container")],
             vec![],
+            None,
         );
 
         let (_, config) = get_config(
@@ -443,6 +448,7 @@ mod priority {
             false,
             vec![String::from("/data")],
             vec![],
+            None,
         );
 
         let (_, config) = get_config(
@@ -520,6 +526,7 @@ mod validation {
             false,
             vec![String::new()],
             vec![],
+            None,
         );
 
         let error = get_config(
@@ -553,6 +560,7 @@ mod validation {
             false,
             vec![String::from(":/container")],
             vec![],
+            None,
         );
 
         let error = get_config(
@@ -586,6 +594,7 @@ mod validation {
             false,
             vec![String::from("/host:")],
             vec![],
+            None,
         );
 
         let error = get_config(
@@ -619,6 +628,7 @@ mod validation {
             false,
             vec![String::from("!/container:extra")],
             vec![],
+            None,
         );
 
         let error = get_config(
@@ -652,6 +662,7 @@ mod validation {
             false,
             vec![String::from("/host:/extra:/container")],
             vec![],
+            None,
         );
 
         let error = get_config(
@@ -685,6 +696,7 @@ mod validation {
             false,
             vec![String::from("relative-path")],
             vec![],
+            None,
         );
 
         let error = get_config(
@@ -718,6 +730,7 @@ mod validation {
             false,
             vec![String::from("/host:relative")],
             vec![],
+            None,
         );
 
         let error = get_config(

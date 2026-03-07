@@ -21,6 +21,7 @@ fn make_config() -> Config {
         no_rebuild: false,
         mountpoints: HashMap::new(),
         environment_variables: HashMap::new(),
+        pre_run: None,
     }
 }
 
@@ -56,6 +57,7 @@ mod build_docker_run_args {
             42,
             &[],
             false,
+            &[],
         );
 
         assert_eq!(
@@ -77,6 +79,7 @@ mod build_docker_run_args {
             42,
             &[],
             true,
+            &[],
         );
 
         assert!(
@@ -101,6 +104,7 @@ mod build_docker_run_args {
             42,
             &[],
             false,
+            &[],
         );
 
         assert!(
@@ -125,6 +129,7 @@ mod build_docker_run_args {
             42,
             &[],
             true,
+            &[],
         );
 
         assert!(
@@ -149,6 +154,7 @@ mod build_docker_run_args {
             42,
             &[],
             true,
+            &[],
         );
 
         assert!(
@@ -169,6 +175,7 @@ mod build_docker_run_args {
             42,
             &[],
             true,
+            &[],
         );
 
         assert!(
@@ -189,6 +196,7 @@ mod build_docker_run_args {
             42,
             &[],
             true,
+            &[],
         );
 
         assert!(
@@ -210,6 +218,7 @@ mod build_docker_run_args {
             42,
             &[],
             true,
+            &[],
         );
 
         assert!(
@@ -230,6 +239,7 @@ mod build_docker_run_args {
             42,
             &[],
             true,
+            &[],
         );
 
         // Only one -v flag (for the current dir).
@@ -256,6 +266,7 @@ mod build_docker_run_args {
             42,
             &[],
             true,
+            &[],
         );
 
         assert!(
@@ -279,6 +290,7 @@ mod build_docker_run_args {
             42,
             &[],
             true,
+            &[],
         );
 
         assert!(
@@ -303,6 +315,7 @@ mod build_docker_run_args {
             42,
             &[],
             true,
+            &[],
         );
 
         assert!(
@@ -327,6 +340,7 @@ mod build_docker_run_args {
             42,
             &[],
             true,
+            &[],
         );
 
         assert!(
@@ -347,6 +361,7 @@ mod build_docker_run_args {
             42,
             &[],
             true,
+            &[],
         );
 
         let expected_image = config.get_image_name();
@@ -354,6 +369,87 @@ mod build_docker_run_args {
             args.last().expect("Args should not be empty"),
             &expected_image,
             "Image name should be the last argument when there are no container args"
+        );
+    }
+
+    #[test]
+    fn pre_run_extra_args_appear_before_image_name() {
+        let config = make_config();
+        let pre_run_extra_args = vec![
+            String::from("--mount"),
+            String::from("/host/path:/container/path"),
+        ];
+        let args = build_docker_run_args(
+            &config,
+            1000,
+            1000,
+            "/home/user/project",
+            None,
+            42,
+            &[],
+            true,
+            &pre_run_extra_args,
+        );
+
+        let expected_image = config.get_image_name();
+        let image_position = args
+            .iter()
+            .position(|arg| arg == &expected_image)
+            .expect("Image name not found in args");
+
+        // The two extra args should appear right before the image name.
+        assert_eq!(
+            args[image_position - 2],
+            "--mount",
+            "Pre-run extra args should appear before the image name: {args:?}"
+        );
+        assert_eq!(
+            args[image_position - 1],
+            "/host/path:/container/path",
+            "Pre-run extra args should appear before the image name: {args:?}"
+        );
+    }
+
+    #[test]
+    fn pre_run_extra_args_and_container_args_coexist() {
+        let config = make_config();
+        let container_args = vec![String::from("bash")];
+        let pre_run_extra_args = vec![String::from("--network"), String::from("host")];
+        let args = build_docker_run_args(
+            &config,
+            1000,
+            1000,
+            "/home/user/project",
+            None,
+            42,
+            &container_args,
+            true,
+            &pre_run_extra_args,
+        );
+
+        let expected_image = config.get_image_name();
+        let image_position = args
+            .iter()
+            .position(|arg| arg == &expected_image)
+            .expect("Image name not found in args");
+
+        // Pre-run args before image.
+        assert_eq!(
+            args[image_position - 2],
+            "--network",
+            "Pre-run extra args should appear before the image name: {args:?}"
+        );
+        assert_eq!(
+            args[image_position - 1],
+            "host",
+            "Pre-run extra args should appear before the image name: {args:?}"
+        );
+
+        // Container args after image.
+        assert_eq!(
+            &args[image_position + 1..],
+            &["bash"],
+            "Container args should appear after the image name: {args:?}"
         );
     }
 
@@ -374,6 +470,7 @@ mod build_docker_run_args {
             42,
             &container_args,
             true,
+            &[],
         );
 
         let expected_image = config.get_image_name();

@@ -4,6 +4,7 @@
 
 mod build;
 mod config;
+mod hooks;
 mod run;
 mod utils;
 
@@ -53,6 +54,8 @@ fn main() -> Result<()> {
             let random_suffix = utils::random::random_name_suffix();
             let stdin_is_terminal = stdin().is_terminal();
 
+            let pre_run_extra_args = hooks::execute_pre_run_hook(config.pre_run.as_deref())?;
+
             match run::run(
                 &config,
                 &RealDockerBackend,
@@ -63,6 +66,7 @@ fn main() -> Result<()> {
                 random_suffix,
                 container_args,
                 stdin_is_terminal,
+                &pre_run_extra_args,
             ) {
                 Ok(infallible) => match infallible {},
                 Err(error) => return Err(error.into()),

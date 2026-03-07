@@ -16,6 +16,7 @@ fn image_name_without_target() {
         false,
         vec![],
         vec![],
+        None,
     );
 
     let (_, config) = get_config(
@@ -49,6 +50,7 @@ fn image_name_with_target() {
         false,
         vec![],
         vec![],
+        None,
     );
 
     let (_, config) = get_config(
@@ -82,6 +84,7 @@ fn image_name_slugifies_project_name() {
         false,
         vec![],
         vec![],
+        None,
     );
 
     let (_, config) = get_config(
@@ -115,6 +118,7 @@ fn image_name_slugifies_username() {
         false,
         vec![],
         vec![],
+        None,
     );
 
     let (_, config) = get_config(
@@ -148,6 +152,7 @@ fn image_name_slugifies_target() {
         false,
         vec![],
         vec![],
+        None,
     );
 
     let (_, config) = get_config(

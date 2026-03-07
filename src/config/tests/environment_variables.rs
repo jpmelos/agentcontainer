@@ -186,6 +186,7 @@ mod parsing_env_var {
             false,
             vec![],
             vec![String::new()],
+            None,
         );
 
         let error = get_config(
@@ -219,6 +220,7 @@ mod parsing_env_var {
             false,
             vec![],
             vec![String::from("!KEY=extra")],
+            None,
         );
 
         let error = get_config(
@@ -256,6 +258,7 @@ mod parsing_cli_args {
             false,
             vec![],
             vec![String::from("KEY=val")],
+            None,
         );
 
         let (_, config) = get_config(
@@ -290,6 +293,7 @@ mod parsing_cli_args {
             false,
             vec![],
             vec![String::from("KEY=value=another")],
+            None,
         );
 
         let (_, config) = get_config(
@@ -323,6 +327,7 @@ mod parsing_cli_args {
             false,
             vec![],
             vec![String::from("KEY")],
+            None,
         );
 
         let (_, config) = get_config(
@@ -365,6 +370,7 @@ mod parsing_cli_args {
             false,
             vec![],
             vec![String::from("!EDITOR")],
+            None,
         );
 
         let (_, config) = get_config(
@@ -408,6 +414,7 @@ mod priority {
             false,
             vec![],
             vec![String::from("EDITOR=nvim")],
+            None,
         );
 
         let (_, config) = get_config(
@@ -445,6 +452,7 @@ mod invalid_environment_variable_keys {
             false,
             vec![],
             vec![String::from("INVALID KEY=value")],
+            None,
         );
 
         let error = get_config(
@@ -478,6 +486,7 @@ mod invalid_environment_variable_keys {
             false,
             vec![],
             vec![String::from("1KEY=value")],
+            None,
         );
 
         let error = get_config(
@@ -511,6 +520,7 @@ mod invalid_environment_variable_keys {
             false,
             vec![],
             vec![String::from("MY-KEY=value")],
+            None,
         );
 
         let error = get_config(
@@ -544,6 +554,7 @@ mod invalid_environment_variable_keys {
             false,
             vec![],
             vec![String::from("BAD KEY")],
+            None,
         );
 
         let error = get_config(
@@ -577,6 +588,7 @@ mod invalid_environment_variable_keys {
             false,
             vec![],
             vec![String::from("!BAD KEY")],
+            None,
         );
 
         let error = get_config(
@@ -668,6 +680,7 @@ mod invalid_environment_variable_keys {
             false,
             vec![],
             vec![String::from("_MY_VAR_2=value")],
+            None,
         );
 
         let (_, config) = get_config(
@@ -701,6 +714,7 @@ mod invalid_environment_variable_keys {
             false,
             vec![],
             vec![String::from("my_var=value")],
+            None,
         );
 
         let (_, config) = get_config(

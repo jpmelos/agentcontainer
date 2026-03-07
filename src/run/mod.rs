@@ -39,6 +39,7 @@ pub(crate) fn run(
     random_suffix: u32,
     container_args: &[String],
     stdin_is_terminal: bool,
+    pre_run_extra_args: &[String],
 ) -> Result<Infallible, RunError> {
     let main_worktree = git_context
         .main_worktree_root(Path::new(current_dir))
@@ -53,6 +54,7 @@ pub(crate) fn run(
         random_suffix,
         container_args,
         stdin_is_terminal,
+        pre_run_extra_args,
     );
 
     docker_backend
@@ -78,6 +80,7 @@ fn build_docker_run_args(
     random_suffix: u32,
     container_args: &[String],
     stdin_is_terminal: bool,
+    pre_run_extra_args: &[String],
 ) -> Vec<String> {
     let mut args: Vec<String> = Vec::new();
 
@@ -155,6 +158,9 @@ fn build_docker_run_args(
             }
         }
     }
+
+    // Extra arguments from the pre-run hook.
+    args.extend_from_slice(pre_run_extra_args);
 
     // Image name (must come after all Docker flags, before container arguments).
     args.push(config.get_image_name());

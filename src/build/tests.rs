@@ -32,6 +32,7 @@ fn make_config(
         no_rebuild,
         mountpoints: HashMap::new(),
         environment_variables: HashMap::new(),
+        pre_run: None,
     }
 }
 
