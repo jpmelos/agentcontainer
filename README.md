@@ -199,8 +199,9 @@ The following build arguments are passed automatically:
 
 ### `run`
 
-Run the agent container. This replaces the current process with `docker run`
-via `exec`.
+Run the agent container. The image is automatically built (or rebuilt if stale)
+before starting the container. This replaces the current process with
+`docker run` via `exec`.
 
 ```
 agentcontainer run [-- <container-args>...]
@@ -220,6 +221,10 @@ agentcontainer run -- --print --output-format json
 # Global flags still go before the subcommand.
 agentcontainer --project-name foo run -- --help
 ```
+
+The build step honors all build-related configuration keys (`force_rebuild`,
+`no_rebuild`, `allow_stale`, `no_build_cache`, etc.). If the image is already
+up to date, the build is skipped and the container starts immediately.
 
 The container is started with:
 
