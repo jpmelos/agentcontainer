@@ -3,23 +3,10 @@ use super::*;
 #[test]
 fn image_name_without_target() {
     let home_dir = tempdir().expect("Failed to create temporary directory");
-    let cli_args = CliArgs::new(
-        Command::Config,
-        None,
-        None,
-        vec![],
-        None,
-        Some(String::from("myproject")),
-        Some(String::from("alice")),
-        None,
-        false,
-        false,
-        false,
-        false,
-        vec![],
-        vec![],
-        None,
-    );
+    let cli_args = CliArgsBuilder::new(Command::Config)
+        .project_name("myproject")
+        .username("alice")
+        .build();
 
     let (_, config) = get_config(
         home_dir
@@ -39,23 +26,11 @@ fn image_name_without_target() {
 #[test]
 fn image_name_with_target() {
     let home_dir = tempdir().expect("Failed to create temporary directory");
-    let cli_args = CliArgs::new(
-        Command::Config,
-        None,
-        None,
-        vec![],
-        None,
-        Some(String::from("myproject")),
-        Some(String::from("alice")),
-        Some(String::from("claude")),
-        false,
-        false,
-        false,
-        false,
-        vec![],
-        vec![],
-        None,
-    );
+    let cli_args = CliArgsBuilder::new(Command::Config)
+        .project_name("myproject")
+        .username("alice")
+        .target("claude")
+        .build();
 
     let (_, config) = get_config(
         home_dir
@@ -75,23 +50,10 @@ fn image_name_with_target() {
 #[test]
 fn image_name_slugifies_project_name() {
     let home_dir = tempdir().expect("Failed to create temporary directory");
-    let cli_args = CliArgs::new(
-        Command::Config,
-        None,
-        None,
-        vec![],
-        None,
-        Some(String::from("My Project")),
-        Some(String::from("alice")),
-        None,
-        false,
-        false,
-        false,
-        false,
-        vec![],
-        vec![],
-        None,
-    );
+    let cli_args = CliArgsBuilder::new(Command::Config)
+        .project_name("My Project")
+        .username("alice")
+        .build();
 
     let (_, config) = get_config(
         home_dir
@@ -111,23 +73,10 @@ fn image_name_slugifies_project_name() {
 #[test]
 fn image_name_slugifies_username() {
     let home_dir = tempdir().expect("Failed to create temporary directory");
-    let cli_args = CliArgs::new(
-        Command::Config,
-        None,
-        None,
-        vec![],
-        None,
-        Some(String::from("myproject")),
-        Some(String::from("Alice Smith")),
-        None,
-        false,
-        false,
-        false,
-        false,
-        vec![],
-        vec![],
-        None,
-    );
+    let cli_args = CliArgsBuilder::new(Command::Config)
+        .project_name("myproject")
+        .username("Alice Smith")
+        .build();
 
     let (_, config) = get_config(
         home_dir
@@ -147,23 +96,11 @@ fn image_name_slugifies_username() {
 #[test]
 fn image_name_slugifies_target() {
     let home_dir = tempdir().expect("Failed to create temporary directory");
-    let cli_args = CliArgs::new(
-        Command::Config,
-        None,
-        None,
-        vec![],
-        None,
-        Some(String::from("myproject")),
-        Some(String::from("alice")),
-        Some(String::from("My Target")),
-        false,
-        false,
-        false,
-        false,
-        vec![],
-        vec![],
-        None,
-    );
+    let cli_args = CliArgsBuilder::new(Command::Config)
+        .project_name("myproject")
+        .username("alice")
+        .target("My Target")
+        .build();
 
     let (_, config) = get_config(
         home_dir

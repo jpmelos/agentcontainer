@@ -15,24 +15,19 @@ use std::io::Error as IoError;
 // ---------------------------------------------------------------------------
 
 /// Construct a `Config` for use in tests, without going through CLI parsing or `figment`.
-fn make_config(
-    dockerfile: &str,
-    allow_stale: bool,
-    force_rebuild: bool,
-    no_rebuild: bool,
-) -> Config {
+fn make_config() -> Config {
     Config {
-        dockerfile: String::from(dockerfile),
+        dockerfile: String::from(".agentcontainer/Dockerfile"),
         build_context: String::from("."),
         build_arguments: HashMap::new(),
         pre_build: None,
         project_name: String::from("myproject"),
         username: String::from("alice"),
         target: None,
-        allow_stale,
-        force_rebuild,
+        allow_stale: false,
+        force_rebuild: false,
         no_build_cache: false,
-        no_rebuild,
+        no_rebuild: false,
         volumes: HashMap::new(),
         environment_variables: HashMap::new(),
         pre_run: None,
@@ -41,7 +36,7 @@ fn make_config(
 
 /// Return the image name produced by the default `make_config` config.
 fn default_image_name() -> String {
-    make_config(".agentcontainer/Dockerfile", false, false, false).get_image_name()
+    make_config().get_image_name()
 }
 
 // ---------------------------------------------------------------------------
@@ -242,7 +237,10 @@ mod build {
 
     #[test]
     fn no_rebuild_with_existing_image_returns_skipped_no_rebuild() {
-        let config = make_config(".agentcontainer/Dockerfile", false, false, true);
+        let config = Config {
+            no_rebuild: true,
+            ..make_config()
+        };
         let docker = MockDocker::image_exists_build_succeeds(yesterday_noon_utc());
         let filesystem = MockFilesystem::with_mtime(long_ago_utc());
         let clock = MockClock::real_now();
@@ -258,7 +256,10 @@ mod build {
 
     #[test]
     fn no_rebuild_with_no_image_returns_error() {
-        let config = make_config(".agentcontainer/Dockerfile", false, false, true);
+        let config = Config {
+            no_rebuild: true,
+            ..make_config()
+        };
         let docker = MockDocker::no_image_build_succeeds();
         let filesystem = MockFilesystem::with_mtime(long_ago_utc());
         let clock = MockClock::real_now();
@@ -278,7 +279,7 @@ mod build {
 
     #[test]
     fn fetch_timestamp_failure_returns_staleness_check_error() {
-        let config = make_config(".agentcontainer/Dockerfile", false, false, false);
+        let config = make_config();
         let docker = MockDocker::fetch_image_creation_timestamp_fails();
         let filesystem = MockFilesystem::with_mtime(long_ago_utc());
         let clock = MockClock::real_now();
@@ -296,7 +297,10 @@ mod build {
     fn force_rebuild_triggers_build_and_returns_built() {
         // Image exists and would otherwise be considered up to date (created today, Dockerfile
         // `mtime` is old), but `force_rebuild` must bypass the staleness check.
-        let config = make_config(".agentcontainer/Dockerfile", false, true, false);
+        let config = Config {
+            force_rebuild: true,
+            ..make_config()
+        };
         let docker = MockDocker::image_exists_build_succeeds(today_noon_utc());
         let filesystem = MockFilesystem::with_mtime(long_ago_utc());
         let clock = MockClock::real_now();
@@ -313,7 +317,7 @@ mod build {
     #[test]
     fn up_to_date_image_returns_up_to_date() {
         // Image created today, Dockerfile mtime is long before the image was built.
-        let config = make_config(".agentcontainer/Dockerfile", false, false, false);
+        let config = make_config();
         let docker = MockDocker::image_exists_build_succeeds(today_noon_utc());
         let filesystem = MockFilesystem::with_mtime(long_ago_utc());
         let clock = MockClock::real_now();
@@ -330,7 +334,7 @@ mod build {
     #[test]
     fn staleness_check_failure_returns_staleness_check_error() {
         // Image exists (so `should_rebuild` is entered), but the filesystem mock fails.
-        let config = make_config(".agentcontainer/Dockerfile", false, false, false);
+        let config = make_config();
         let docker = MockDocker::image_exists_build_succeeds(yesterday_noon_utc());
         let filesystem = MockFilesystem::failing();
         let clock = MockClock::real_now();
@@ -346,7 +350,7 @@ mod build {
 
     #[test]
     fn build_failure_with_no_existing_image_returns_no_fallback_error() {
-        let config = make_config(".agentcontainer/Dockerfile", false, false, false);
+        let config = make_config();
         let docker = MockDocker::no_image_build_fails();
         let filesystem = MockFilesystem::with_mtime(long_ago_utc());
         let clock = MockClock::real_now();
@@ -366,7 +370,10 @@ mod build {
 
     #[test]
     fn build_failure_with_stale_image_and_allow_stale_returns_using_stale() {
-        let config = make_config(".agentcontainer/Dockerfile", true, false, false);
+        let config = Config {
+            allow_stale: true,
+            ..make_config()
+        };
         let docker = MockDocker::image_exists_build_fails(yesterday_noon_utc());
         // Dockerfile `mtime` is old so yesterday's image would normally be stale; we just need
         // `should_rebuild` to return `true` so `docker build` is attempted.
@@ -385,7 +392,7 @@ mod build {
 
     #[test]
     fn build_failure_with_stale_image_and_no_allow_stale_returns_stale_exists_error() {
-        let config = make_config(".agentcontainer/Dockerfile", false, false, false);
+        let config = make_config();
         let docker = MockDocker::image_exists_build_fails(yesterday_noon_utc());
         let filesystem = MockFilesystem::with_mtime(long_ago_utc());
         let clock = MockClock::real_now();
@@ -407,7 +414,7 @@ mod build {
 
     #[test]
     fn pre_build_extra_args_are_forwarded_to_docker_build() {
-        let config = make_config(".agentcontainer/Dockerfile", false, false, false);
+        let config = make_config();
         let docker = MockDocker::no_image_build_succeeds();
         let filesystem = MockFilesystem::with_mtime(long_ago_utc());
         let clock = MockClock::real_now();
@@ -441,7 +448,7 @@ mod should_rebuild_fn {
 
     #[test]
     fn no_existing_image_triggers_rebuild() {
-        let config = make_config(".agentcontainer/Dockerfile", false, false, false);
+        let config = make_config();
         // No existing image.
         let docker = MockDocker::no_image_build_succeeds();
         // Filesystem mock is irrelevant because `should_rebuild` short-circuits when there is no
@@ -465,7 +472,7 @@ mod should_rebuild_fn {
         // Dockerfile was modified after the image was created.
         let dockerfile_mtime = image_created + chrono::Duration::seconds(1);
 
-        let config = make_config(".agentcontainer/Dockerfile", false, false, false);
+        let config = make_config();
         let docker = MockDocker::image_exists_build_succeeds(image_created);
         let filesystem = MockFilesystem::with_mtime(dockerfile_mtime);
         let clock = MockClock::real_now();
@@ -485,7 +492,7 @@ mod should_rebuild_fn {
         let image_created = yesterday_noon_utc();
         let dockerfile_mtime = long_ago_utc();
 
-        let config = make_config(".agentcontainer/Dockerfile", false, false, false);
+        let config = make_config();
         let docker = MockDocker::image_exists_build_succeeds(image_created);
         let filesystem = MockFilesystem::with_mtime(dockerfile_mtime);
         let clock = MockClock::real_now();
@@ -505,7 +512,7 @@ mod should_rebuild_fn {
         let image_created = today_noon_utc();
         let dockerfile_mtime = long_ago_utc();
 
-        let config = make_config(".agentcontainer/Dockerfile", false, false, false);
+        let config = make_config();
         let docker = MockDocker::image_exists_build_succeeds(image_created);
         let filesystem = MockFilesystem::with_mtime(dockerfile_mtime);
         let clock = MockClock::real_now();
@@ -523,7 +530,7 @@ mod should_rebuild_fn {
     #[test]
     fn filesystem_error_reading_dockerfile_mtime_propagates_as_staleness_check_error() {
         // Image exists so `should_rebuild` is entered, but the filesystem mock fails.
-        let config = make_config(".agentcontainer/Dockerfile", false, false, false);
+        let config = make_config();
         let docker = MockDocker::image_exists_build_succeeds(yesterday_noon_utc());
         let filesystem = MockFilesystem::failing();
         let clock = MockClock::real_now();

@@ -75,23 +75,7 @@ mod pre_build {
             r#"pre_build = "/usr/local/bin/setup.sh""#,
         );
         env::set_current_dir(cwd.path()).expect("Failed to set current directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            Some(String::new()),
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![],
-            vec![],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config).pre_build("").build();
 
         let (_, config) = get_config(
             home_dir
@@ -185,23 +169,7 @@ mod target {
             r#"target = "builder""#,
         );
         env::set_current_dir(cwd.path()).expect("Failed to set current directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            Some(String::new()),
-            false,
-            false,
-            false,
-            false,
-            vec![],
-            vec![],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config).target("").build();
 
         let (_, config) = get_config(
             home_dir
@@ -295,23 +263,7 @@ mod pre_run {
             r#"pre_run = "/usr/local/bin/setup.sh""#,
         );
         env::set_current_dir(cwd.path()).expect("Failed to set current directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![],
-            vec![],
-            Some(String::new()),
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config).pre_run("").build();
 
         let (_, config) = get_config(
             home_dir

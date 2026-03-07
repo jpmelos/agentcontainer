@@ -40,6 +40,74 @@ fn has_flag_pair(args: &[String], flag: &str, value: &str) -> bool {
         .any(|pair| pair[0] == flag && pair[1] == value)
 }
 
+/// Builder for calling `build_docker_run_args` with sensible defaults.
+///
+/// Most tests only vary 1–2 arguments. The builder lets tests specify only the arguments that
+/// matter for each scenario while keeping the rest at their default values.
+struct RunArgsBuilder<'config> {
+    config: &'config Config,
+    gid: u32,
+    main_worktree: Option<PathBuf>,
+    container_args: Vec<String>,
+    stdin_is_terminal: bool,
+    pre_run_extra_args: Vec<String>,
+}
+
+impl<'config> RunArgsBuilder<'config> {
+    /// Start building a `build_docker_run_args` call with the given config and sensible defaults
+    /// for all other parameters.
+    fn new(config: &'config Config) -> Self {
+        Self {
+            config,
+            gid: 1000,
+            main_worktree: None,
+            container_args: vec![],
+            stdin_is_terminal: true,
+            pre_run_extra_args: vec![],
+        }
+    }
+
+    fn gid(mut self, gid: u32) -> Self {
+        self.gid = gid;
+        self
+    }
+
+    fn main_worktree(mut self, path: &str) -> Self {
+        self.main_worktree = Some(PathBuf::from(path));
+        self
+    }
+
+    fn container_args(mut self, args: &[&str]) -> Self {
+        self.container_args = args.iter().map(|s| String::from(*s)).collect();
+        self
+    }
+
+    fn stdin_is_not_terminal(mut self) -> Self {
+        self.stdin_is_terminal = false;
+        self
+    }
+
+    fn pre_run_extra_args(mut self, args: &[&str]) -> Self {
+        self.pre_run_extra_args = args.iter().map(|s| String::from(*s)).collect();
+        self
+    }
+
+    /// Call `build_docker_run_args` with the configured parameters and return the result.
+    fn build(self) -> Vec<String> {
+        build_docker_run_args(
+            self.config,
+            1000,
+            self.gid,
+            "/home/user/project",
+            self.main_worktree.as_deref(),
+            42,
+            &self.container_args,
+            self.stdin_is_terminal,
+            &self.pre_run_extra_args,
+        )
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Tests for `build_docker_run_args()`.
 // ---------------------------------------------------------------------------
@@ -50,17 +118,7 @@ mod build_docker_run_args {
     #[test]
     fn includes_fixed_flags() {
         let config = make_config();
-        let args = build_docker_run_args(
-            &config,
-            1000,
-            1000,
-            "/home/user/project",
-            None,
-            42,
-            &[],
-            false,
-            &[],
-        );
+        let args = RunArgsBuilder::new(&config).stdin_is_not_terminal().build();
 
         assert_eq!(
             &args[..3],
@@ -72,17 +130,7 @@ mod build_docker_run_args {
     #[test]
     fn includes_tty_flags_when_stdin_is_terminal() {
         let config = make_config();
-        let args = build_docker_run_args(
-            &config,
-            1000,
-            1000,
-            "/home/user/project",
-            None,
-            42,
-            &[],
-            true,
-            &[],
-        );
+        let args = RunArgsBuilder::new(&config).build();
 
         assert!(
             args.contains(&String::from("-t")),
@@ -97,17 +145,7 @@ mod build_docker_run_args {
     #[test]
     fn omits_tty_flags_when_stdin_is_not_terminal() {
         let config = make_config();
-        let args = build_docker_run_args(
-            &config,
-            1000,
-            1000,
-            "/home/user/project",
-            None,
-            42,
-            &[],
-            false,
-            &[],
-        );
+        let args = RunArgsBuilder::new(&config).stdin_is_not_terminal().build();
 
         assert!(
             !args.contains(&String::from("-t")),
@@ -122,17 +160,7 @@ mod build_docker_run_args {
     #[test]
     fn includes_user_mapping() {
         let config = make_config();
-        let args = build_docker_run_args(
-            &config,
-            1000,
-            1001,
-            "/home/user/project",
-            None,
-            42,
-            &[],
-            true,
-            &[],
-        );
+        let args = RunArgsBuilder::new(&config).gid(1001).build();
 
         assert!(
             has_flag_pair(&args, "--user", "1000:1001"),
@@ -147,17 +175,7 @@ mod build_docker_run_args {
     #[test]
     fn includes_container_name() {
         let config = make_config();
-        let args = build_docker_run_args(
-            &config,
-            1000,
-            1000,
-            "/home/user/project",
-            None,
-            42,
-            &[],
-            true,
-            &[],
-        );
+        let args = RunArgsBuilder::new(&config).build();
 
         assert!(
             has_flag_pair(&args, "--name", "agentcontainer_myproject_42"),
@@ -168,17 +186,7 @@ mod build_docker_run_args {
     #[test]
     fn includes_working_directory() {
         let config = make_config();
-        let args = build_docker_run_args(
-            &config,
-            1000,
-            1000,
-            "/home/user/project",
-            None,
-            42,
-            &[],
-            true,
-            &[],
-        );
+        let args = RunArgsBuilder::new(&config).build();
 
         assert!(
             has_flag_pair(&args, "-w", "/home/user/project"),
@@ -189,17 +197,7 @@ mod build_docker_run_args {
     #[test]
     fn includes_current_dir_volume() {
         let config = make_config();
-        let args = build_docker_run_args(
-            &config,
-            1000,
-            1000,
-            "/home/user/project",
-            None,
-            42,
-            &[],
-            true,
-            &[],
-        );
+        let args = RunArgsBuilder::new(&config).build();
 
         assert!(
             has_flag_pair(&args, "-v", "/home/user/project:/home/user/project"),
@@ -210,18 +208,9 @@ mod build_docker_run_args {
     #[test]
     fn includes_worktree_volume_when_present() {
         let config = make_config();
-        let worktree = PathBuf::from("/home/user/main-repo");
-        let args = build_docker_run_args(
-            &config,
-            1000,
-            1000,
-            "/home/user/project",
-            Some(&worktree),
-            42,
-            &[],
-            true,
-            &[],
-        );
+        let args = RunArgsBuilder::new(&config)
+            .main_worktree("/home/user/main-repo")
+            .build();
 
         assert!(
             has_flag_pair(&args, "-v", "/home/user/main-repo:/home/user/main-repo"),
@@ -232,17 +221,7 @@ mod build_docker_run_args {
     #[test]
     fn no_worktree_volume_when_absent() {
         let config = make_config();
-        let args = build_docker_run_args(
-            &config,
-            1000,
-            1000,
-            "/home/user/project",
-            None,
-            42,
-            &[],
-            true,
-            &[],
-        );
+        let args = RunArgsBuilder::new(&config).build();
 
         // Only one -v flag (for the current dir).
         let volume_count = args.iter().filter(|arg| *arg == "-v").count();
@@ -259,17 +238,7 @@ mod build_docker_run_args {
             String::from("/container/path"),
             VolumeEntry::Active(String::from("/host/path")),
         );
-        let args = build_docker_run_args(
-            &config,
-            1000,
-            1000,
-            "/home/user/project",
-            None,
-            42,
-            &[],
-            true,
-            &[],
-        );
+        let args = RunArgsBuilder::new(&config).build();
 
         assert!(
             has_flag_pair(&args, "-v", "/host/path:/container/path"),
@@ -283,17 +252,7 @@ mod build_docker_run_args {
         config
             .volumes
             .insert(String::from("/shared/data"), VolumeEntry::SamePath);
-        let args = build_docker_run_args(
-            &config,
-            1000,
-            1000,
-            "/home/user/project",
-            None,
-            42,
-            &[],
-            true,
-            &[],
-        );
+        let args = RunArgsBuilder::new(&config).build();
 
         assert!(
             has_flag_pair(&args, "-v", "/shared/data:/shared/data"),
@@ -308,17 +267,7 @@ mod build_docker_run_args {
             String::from("MY_VAR"),
             EnvironmentVariableEntry::Value(String::from("my_value")),
         );
-        let args = build_docker_run_args(
-            &config,
-            1000,
-            1000,
-            "/home/user/project",
-            None,
-            42,
-            &[],
-            true,
-            &[],
-        );
+        let args = RunArgsBuilder::new(&config).build();
 
         assert!(
             has_flag_pair(&args, "-e", "MY_VAR=my_value"),
@@ -333,17 +282,7 @@ mod build_docker_run_args {
             String::from("INHERITED_VAR"),
             EnvironmentVariableEntry::Inherit,
         );
-        let args = build_docker_run_args(
-            &config,
-            1000,
-            1000,
-            "/home/user/project",
-            None,
-            42,
-            &[],
-            true,
-            &[],
-        );
+        let args = RunArgsBuilder::new(&config).build();
 
         assert!(
             has_flag_pair(&args, "-e", "INHERITED_VAR"),
@@ -354,17 +293,7 @@ mod build_docker_run_args {
     #[test]
     fn image_name_is_last_when_no_container_args() {
         let config = make_config();
-        let args = build_docker_run_args(
-            &config,
-            1000,
-            1000,
-            "/home/user/project",
-            None,
-            42,
-            &[],
-            true,
-            &[],
-        );
+        let args = RunArgsBuilder::new(&config).build();
 
         let expected_image = config.get_image_name();
         assert_eq!(
@@ -377,21 +306,9 @@ mod build_docker_run_args {
     #[test]
     fn pre_run_extra_args_appear_before_image_name() {
         let config = make_config();
-        let pre_run_extra_args = vec![
-            String::from("--volume"),
-            String::from("/host/path:/container/path"),
-        ];
-        let args = build_docker_run_args(
-            &config,
-            1000,
-            1000,
-            "/home/user/project",
-            None,
-            42,
-            &[],
-            true,
-            &pre_run_extra_args,
-        );
+        let args = RunArgsBuilder::new(&config)
+            .pre_run_extra_args(&["--volume", "/host/path:/container/path"])
+            .build();
 
         let expected_image = config.get_image_name();
         let image_position = args
@@ -415,19 +332,10 @@ mod build_docker_run_args {
     #[test]
     fn pre_run_extra_args_and_container_args_coexist() {
         let config = make_config();
-        let container_args = vec![String::from("bash")];
-        let pre_run_extra_args = vec![String::from("--network"), String::from("host")];
-        let args = build_docker_run_args(
-            &config,
-            1000,
-            1000,
-            "/home/user/project",
-            None,
-            42,
-            &container_args,
-            true,
-            &pre_run_extra_args,
-        );
+        let args = RunArgsBuilder::new(&config)
+            .container_args(&["bash"])
+            .pre_run_extra_args(&["--network", "host"])
+            .build();
 
         let expected_image = config.get_image_name();
         let image_position = args
@@ -458,22 +366,9 @@ mod build_docker_run_args {
     #[test]
     fn container_args_appear_after_image_name() {
         let config = make_config();
-        let container_args = vec![
-            String::from("--print"),
-            String::from("--output-format"),
-            String::from("json"),
-        ];
-        let args = build_docker_run_args(
-            &config,
-            1000,
-            1000,
-            "/home/user/project",
-            None,
-            42,
-            &container_args,
-            true,
-            &[],
-        );
+        let args = RunArgsBuilder::new(&config)
+            .container_args(&["--print", "--output-format", "json"])
+            .build();
 
         let expected_image = config.get_image_name();
         let image_position = args

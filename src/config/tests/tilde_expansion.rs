@@ -1,4 +1,4 @@
-use super::{CliArgs, Command, VolumeEntry, default_cli_args, get_config, write_file};
+use super::{CliArgsBuilder, Command, VolumeEntry, default_cli_args, get_config, write_file};
 use std::env;
 use tempfile::tempdir;
 
@@ -115,23 +115,9 @@ fn bare_tilde_in_host_path_is_expanded_to_home_dir() {
 #[test]
 fn tilde_in_cli_host_path_is_expanded_to_home_dir() {
     let home_dir = tempdir().expect("Failed to create temporary directory");
-    let cli_args = CliArgs::new(
-        Command::Config,
-        None,
-        None,
-        vec![],
-        None,
-        None,
-        None,
-        None,
-        false,
-        false,
-        false,
-        false,
-        vec![String::from("~/projects:/container")],
-        vec![],
-        None,
-    );
+    let cli_args = CliArgsBuilder::new(Command::Config)
+        .volumes(&["~/projects:/container"])
+        .build();
 
     let home_dir_str = home_dir
         .path()

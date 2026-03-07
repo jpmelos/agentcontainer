@@ -13,49 +13,115 @@ use super::{
 use std::{collections::HashMap, env, fs, path::Path};
 use tempfile::tempdir;
 
-impl CliArgs {
-    /// Construct a `CliArgs` for use in tests, without going through CLI parsing.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "Test constructor needs to accept all fields."
-    )]
-    #[expect(
-        clippy::fn_params_excessive_bools,
-        reason = "Test constructor mirrors the CLI flags exactly."
-    )]
-    fn new(
-        command: Command,
-        dockerfile: Option<String>,
-        build_context: Option<String>,
-        build_arguments: Vec<String>,
-        pre_build: Option<String>,
-        project_name: Option<String>,
-        username: Option<String>,
-        target: Option<String>,
-        allow_stale: bool,
-        force_rebuild: bool,
-        no_build_cache: bool,
-        no_rebuild: bool,
-        volumes: Vec<String>,
-        environment_variables: Vec<String>,
-        pre_run: Option<String>,
-    ) -> Self {
+/// Builder for constructing `CliArgs` in tests without specifying all fields.
+struct CliArgsBuilder {
+    command: Command,
+    dockerfile: Option<String>,
+    build_arguments: Vec<String>,
+    pre_build: Option<String>,
+    project_name: Option<String>,
+    username: Option<String>,
+    target: Option<String>,
+    force_rebuild: bool,
+    no_rebuild: bool,
+    volumes: Vec<String>,
+    environment_variables: Vec<String>,
+    pre_run: Option<String>,
+}
+
+impl CliArgsBuilder {
+    /// Start building a `CliArgs` for the given subcommand, with all other fields set to their
+    /// defaults.
+    fn new(command: Command) -> Self {
         Self {
-            dockerfile,
-            build_context,
-            build_arguments,
-            pre_build,
-            project_name,
-            username,
-            target,
-            allow_stale,
-            force_rebuild,
-            no_build_cache,
-            no_rebuild,
-            volumes,
-            environment_variables,
-            pre_run,
             command,
+            dockerfile: None,
+            build_arguments: vec![],
+            pre_build: None,
+            project_name: None,
+            username: None,
+            target: None,
+            force_rebuild: false,
+            no_rebuild: false,
+            volumes: vec![],
+            environment_variables: vec![],
+            pre_run: None,
+        }
+    }
+
+    fn dockerfile(mut self, value: &str) -> Self {
+        self.dockerfile = Some(String::from(value));
+        self
+    }
+
+    fn build_arguments(mut self, values: &[&str]) -> Self {
+        self.build_arguments = values.iter().map(|s| String::from(*s)).collect();
+        self
+    }
+
+    fn pre_build(mut self, value: &str) -> Self {
+        self.pre_build = Some(String::from(value));
+        self
+    }
+
+    fn project_name(mut self, value: &str) -> Self {
+        self.project_name = Some(String::from(value));
+        self
+    }
+
+    fn username(mut self, value: &str) -> Self {
+        self.username = Some(String::from(value));
+        self
+    }
+
+    fn target(mut self, value: &str) -> Self {
+        self.target = Some(String::from(value));
+        self
+    }
+
+    fn force_rebuild(mut self) -> Self {
+        self.force_rebuild = true;
+        self
+    }
+
+    fn no_rebuild(mut self) -> Self {
+        self.no_rebuild = true;
+        self
+    }
+
+    fn volumes(mut self, values: &[&str]) -> Self {
+        self.volumes = values.iter().map(|s| String::from(*s)).collect();
+        self
+    }
+
+    fn environment_variables(mut self, values: &[&str]) -> Self {
+        self.environment_variables = values.iter().map(|s| String::from(*s)).collect();
+        self
+    }
+
+    fn pre_run(mut self, value: &str) -> Self {
+        self.pre_run = Some(String::from(value));
+        self
+    }
+
+    /// Consume the builder and produce the `CliArgs`.
+    fn build(self) -> CliArgs {
+        CliArgs {
+            command: self.command,
+            dockerfile: self.dockerfile,
+            build_context: None,
+            build_arguments: self.build_arguments,
+            pre_build: self.pre_build,
+            project_name: self.project_name,
+            username: self.username,
+            target: self.target,
+            allow_stale: false,
+            force_rebuild: self.force_rebuild,
+            no_build_cache: false,
+            no_rebuild: self.no_rebuild,
+            volumes: self.volumes,
+            environment_variables: self.environment_variables,
+            pre_run: self.pre_run,
         }
     }
 }
@@ -74,23 +140,7 @@ fn write_file(path: &Path, content: &str) {
 
 /// Construct a default `CliArgs` for tests that don't care about CLI arguments.
 fn default_cli_args(command: Command) -> CliArgs {
-    CliArgs::new(
-        command,
-        None,
-        None,
-        vec![],
-        None,
-        None,
-        None,
-        None,
-        false,
-        false,
-        false,
-        false,
-        vec![],
-        vec![],
-        None,
-    )
+    CliArgsBuilder::new(command).build()
 }
 
 /// Construct a `Config` for use in tests, without going through CLI parsing or `figment`.
@@ -272,23 +322,9 @@ mod configuration_sources_are_read {
     #[test]
     fn cli_arg_is_read() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            Some(String::from("from-cli")),
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![],
-            vec![],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .dockerfile("from-cli")
+            .build();
 
         let (_, config) = get_config(
             home_dir
@@ -520,23 +556,9 @@ mod configuration_sources_priority_order {
         unsafe {
             env::set_var("AGENTCONTAINER_DOCKERFILE", "from-env");
         };
-        let cli_args = CliArgs::new(
-            Command::Config,
-            Some(String::from("from-cli")),
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![],
-            vec![],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .dockerfile("from-cli")
+            .build();
 
         let (_, config) = get_config(
             home_dir
@@ -576,23 +598,9 @@ mod configuration_sources_priority_order {
         unsafe {
             env::set_var("AGENTCONTAINER_DOCKERFILE", "from-env");
         };
-        let cli_args = CliArgs::new(
-            Command::Config,
-            Some(String::from("from-cli")),
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![],
-            vec![],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .dockerfile("from-cli")
+            .build();
 
         let (_, config) = get_config(
             home_dir
@@ -853,23 +861,10 @@ mod validation {
     #[test]
     fn username_not_slugifiable_is_an_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            Some(String::from("myproject")),
-            Some(String::from("@@@")),
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![],
-            vec![],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .project_name("myproject")
+            .username("@@@")
+            .build();
 
         let error = get_config(
             home_dir
@@ -889,23 +884,10 @@ mod validation {
     #[test]
     fn project_name_not_slugifiable_is_an_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            Some(String::from("@@@")),
-            Some(String::from("alice")),
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![],
-            vec![],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .project_name("@@@")
+            .username("alice")
+            .build();
 
         let result = get_config(
             home_dir
@@ -924,23 +906,11 @@ mod validation {
     #[test]
     fn target_not_slugifiable_is_an_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            Some(String::from("myproject")),
-            Some(String::from("alice")),
-            Some(String::from("@@@")),
-            false,
-            false,
-            false,
-            false,
-            vec![],
-            vec![],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .project_name("myproject")
+            .username("alice")
+            .target("@@@")
+            .build();
 
         let error = get_config(
             home_dir
@@ -960,23 +930,10 @@ mod validation {
     #[test]
     fn force_rebuild_and_no_rebuild_together_is_an_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cli_args = CliArgs::new(
-            Command::Build,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            true, // force_rebuild
-            false,
-            true, // no_rebuild
-            vec![],
-            vec![],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Build)
+            .force_rebuild()
+            .no_rebuild()
+            .build();
 
         let error = get_config(
             home_dir

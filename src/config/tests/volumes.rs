@@ -1,4 +1,6 @@
-use super::{CliArgs, Command, ConfigError, VolumeEntry, default_cli_args, get_config, write_file};
+use super::{
+    CliArgsBuilder, Command, ConfigError, VolumeEntry, default_cli_args, get_config, write_file,
+};
 use std::env;
 use tempfile::tempdir;
 
@@ -228,23 +230,9 @@ mod parsing_cli_args {
     #[test]
     fn cli_volume_host_container_format_is_parsed_correctly() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![String::from("/host:/container")],
-            vec![],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .volumes(&["/host:/container"])
+            .build();
 
         let (_, config) = get_config(
             home_dir
@@ -264,23 +252,9 @@ mod parsing_cli_args {
     #[test]
     fn cli_volume_same_path_format_is_parsed_correctly() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![String::from("/same-path")],
-            vec![],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .volumes(&["/same-path"])
+            .build();
 
         let (_, config) = get_config(
             home_dir
@@ -313,23 +287,9 @@ mod parsing_cli_args {
             "#,
         );
         env::set_current_dir(cwd.path()).expect("Failed to set current directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![String::from("!/container")],
-            vec![],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .volumes(&["!/container"])
+            .build();
 
         let (_, config) = get_config(
             home_dir
@@ -346,23 +306,9 @@ mod parsing_cli_args {
     #[test]
     fn cli_host_container_with_relative_host_path_is_accepted() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![String::from("relative-host:/container")],
-            vec![],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .volumes(&["relative-host:/container"])
+            .build();
 
         let (_, config) = get_config(
             home_dir
@@ -395,23 +341,9 @@ mod priority {
             "#,
         );
         env::set_current_dir(cwd.path()).expect("Failed to set current directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![String::from("/host-from-cli:/container")],
-            vec![],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .volumes(&["/host-from-cli:/container"])
+            .build();
 
         let (_, config) = get_config(
             home_dir
@@ -440,23 +372,9 @@ mod priority {
             "#,
         );
         env::set_current_dir(cwd.path()).expect("Failed to set current directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![String::from("/data")],
-            vec![],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .volumes(&["/data"])
+            .build();
 
         let (_, config) = get_config(
             home_dir
@@ -517,23 +435,7 @@ mod validation {
     #[test]
     fn cli_volume_empty_string_triggers_invalid_volume_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![String::new()],
-            vec![],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config).volumes(&[""]).build();
 
         let error = get_config(
             home_dir
@@ -553,23 +455,9 @@ mod validation {
     #[test]
     fn malformed_cli_volume_empty_host_triggers_invalid_volume_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![String::from(":/container")],
-            vec![],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .volumes(&[":/container"])
+            .build();
 
         let error = get_config(
             home_dir
@@ -589,23 +477,9 @@ mod validation {
     #[test]
     fn malformed_cli_volume_empty_container_path_triggers_invalid_volume_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![String::from("/host:")],
-            vec![],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .volumes(&["/host:"])
+            .build();
 
         let error = get_config(
             home_dir
@@ -625,23 +499,9 @@ mod validation {
     #[test]
     fn cli_volume_removal_with_colon_in_container_path_triggers_invalid_volume_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![String::from("!/container:extra")],
-            vec![],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .volumes(&["!/container:extra"])
+            .build();
 
         let error = get_config(
             home_dir
@@ -661,23 +521,9 @@ mod validation {
     #[test]
     fn cli_volume_with_multiple_colons_triggers_invalid_volume_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![String::from("/host:/extra:/container")],
-            vec![],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .volumes(&["/host:/extra:/container"])
+            .build();
 
         let error = get_config(
             home_dir
@@ -697,23 +543,9 @@ mod validation {
     #[test]
     fn cli_same_path_with_relative_path_triggers_invalid_volume_path_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![String::from("relative-path")],
-            vec![],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .volumes(&["relative-path"])
+            .build();
 
         let error = get_config(
             home_dir
@@ -733,23 +565,9 @@ mod validation {
     #[test]
     fn cli_host_container_with_relative_container_path_triggers_invalid_volume_path_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![String::from("/host:relative")],
-            vec![],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .volumes(&["/host:relative"])
+            .build();
 
         let error = get_config(
             home_dir

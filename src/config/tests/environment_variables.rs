@@ -1,5 +1,5 @@
 use super::{
-    CliArgs, Command, ConfigError, EnvironmentVariableEntry, default_cli_args, get_config,
+    CliArgsBuilder, Command, ConfigError, EnvironmentVariableEntry, default_cli_args, get_config,
     write_file,
 };
 use std::env;
@@ -173,23 +173,9 @@ mod parsing_env_var {
     #[test]
     fn malformed_cli_env_var_empty_string_triggers_invalid_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![],
-            vec![String::new()],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .environment_variables(&[""])
+            .build();
 
         let error = get_config(
             home_dir
@@ -209,23 +195,9 @@ mod parsing_env_var {
     #[test]
     fn cli_env_var_removal_with_equals_in_key_triggers_invalid_key_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![],
-            vec![String::from("!KEY=extra")],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .environment_variables(&["!KEY=extra"])
+            .build();
 
         let error = get_config(
             home_dir
@@ -249,23 +221,9 @@ mod parsing_cli_args {
     #[test]
     fn cli_env_var_key_equals_value_format_parses_correctly() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![],
-            vec![String::from("KEY=val")],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .environment_variables(&["KEY=val"])
+            .build();
 
         let (_, config) = get_config(
             home_dir
@@ -286,23 +244,9 @@ mod parsing_cli_args {
     fn cli_env_var_key_equals_value_with_equals_in_value_parses_correctly() {
         // Split is on the first `=` only; anything after is part of the value.
         let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![],
-            vec![String::from("KEY=value=another")],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .environment_variables(&["KEY=value=another"])
+            .build();
 
         let (_, config) = get_config(
             home_dir
@@ -322,23 +266,9 @@ mod parsing_cli_args {
     #[test]
     fn cli_env_var_key_only_format_means_inherit() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![],
-            vec![String::from("KEY")],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .environment_variables(&["KEY"])
+            .build();
 
         let (_, config) = get_config(
             home_dir
@@ -367,23 +297,9 @@ mod parsing_cli_args {
             "#,
         );
         env::set_current_dir(cwd.path()).expect("Failed to set current directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![],
-            vec![String::from("!EDITOR")],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .environment_variables(&["!EDITOR"])
+            .build();
 
         let (_, config) = get_config(
             home_dir
@@ -413,23 +329,9 @@ mod priority {
             "#,
         );
         env::set_current_dir(cwd.path()).expect("Failed to set current directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![],
-            vec![String::from("EDITOR=nvim")],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .environment_variables(&["EDITOR=nvim"])
+            .build();
 
         let (_, config) = get_config(
             home_dir
@@ -453,23 +355,9 @@ mod invalid_environment_variable_keys {
     #[test]
     fn cli_key_with_spaces_is_rejected() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![],
-            vec![String::from("INVALID KEY=value")],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .environment_variables(&["INVALID KEY=value"])
+            .build();
 
         let error = get_config(
             home_dir
@@ -489,23 +377,9 @@ mod invalid_environment_variable_keys {
     #[test]
     fn cli_key_starting_with_digit_is_rejected() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![],
-            vec![String::from("1KEY=value")],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .environment_variables(&["1KEY=value"])
+            .build();
 
         let error = get_config(
             home_dir
@@ -525,23 +399,9 @@ mod invalid_environment_variable_keys {
     #[test]
     fn cli_key_with_hyphen_is_rejected() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![],
-            vec![String::from("MY-KEY=value")],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .environment_variables(&["MY-KEY=value"])
+            .build();
 
         let error = get_config(
             home_dir
@@ -561,23 +421,9 @@ mod invalid_environment_variable_keys {
     #[test]
     fn cli_inherit_format_with_invalid_key_is_rejected() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![],
-            vec![String::from("BAD KEY")],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .environment_variables(&["BAD KEY"])
+            .build();
 
         let error = get_config(
             home_dir
@@ -597,23 +443,9 @@ mod invalid_environment_variable_keys {
     #[test]
     fn cli_removal_format_with_invalid_key_is_rejected() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![],
-            vec![String::from("!BAD KEY")],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .environment_variables(&["!BAD KEY"])
+            .build();
 
         let error = get_config(
             home_dir
@@ -691,23 +523,9 @@ mod invalid_environment_variable_keys {
     #[test]
     fn valid_key_with_underscores_and_digits_is_accepted() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![],
-            vec![String::from("_MY_VAR_2=value")],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .environment_variables(&["_MY_VAR_2=value"])
+            .build();
 
         let (_, config) = get_config(
             home_dir
@@ -727,23 +545,9 @@ mod invalid_environment_variable_keys {
     #[test]
     fn valid_lowercase_key_is_accepted() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cli_args = CliArgs::new(
-            Command::Config,
-            None,
-            None,
-            vec![],
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-            false,
-            false,
-            vec![],
-            vec![String::from("my_var=value")],
-            None,
-        );
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .environment_variables(&["my_var=value"])
+            .build();
 
         let (_, config) = get_config(
             home_dir
