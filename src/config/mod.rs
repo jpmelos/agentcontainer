@@ -421,7 +421,9 @@ impl From<figment::Error> for ConfigError {
 ///
 /// Configuration sources are merged in the following order (lowest to highest priority):
 /// - `~/.config/agentcontainer/config.toml`
-/// - `~/.agentcontainer.toml`
+/// - `~/.agentcontainer/config.toml`
+/// - `{ancestor}/.agentcontainer/config.toml` for each ancestor directory from `/` towards the
+///   current working directory (excluding the CWD itself). Closer to `/` has lower priority.
 /// - `.agentcontainer/config.toml`
 /// - `.agentcontainer/config.local.toml`
 /// - Environment variables prefixed by `AGENTCONTAINER_`.
@@ -473,11 +475,33 @@ pub(crate) fn get_config<'cli_args>(
         Box::new(Toml::file(format!(
             "{home_dir}/.config/agentcontainer/config.toml"
         ))),
-        Box::new(Toml::file(format!("{home_dir}/.agentcontainer.toml"))),
-        Box::new(Toml::file(".agentcontainer/config.toml")),
-        Box::new(Toml::file(".agentcontainer/config.local.toml")),
-        Box::new(Env::prefixed("AGENTCONTAINER_")),
+        Box::new(Toml::file(format!(
+            "{home_dir}/.agentcontainer/config.toml"
+        ))),
     ];
+
+    // Ancestor directory configs: traverse from `/` towards CWD (exclusive), each providing
+    // `.agentcontainer/config.toml`. Closer to `/` has lower priority. When the home directory
+    // is an ancestor of CWD it appears in this traversal at higher priority than the explicit
+    // home entry above, which is the desired behavior.
+    if let Ok(cwd) = env::current_dir() {
+        // `ancestors()` yields CWD, parent, grandparent, …, `/`. Skip CWD itself (already
+        // covered by the relative `.agentcontainer/config.toml` entry below) and reverse so
+        // that `/` comes first (lowest priority).
+        let mut ancestor_configs: Vec<_> = cwd
+            .ancestors()
+            .skip(1)
+            .map(|ancestor| ancestor.join(".agentcontainer/config.toml"))
+            .collect();
+        ancestor_configs.reverse();
+        for config_path in ancestor_configs {
+            providers.push(Box::new(Toml::file(config_path)));
+        }
+    }
+
+    providers.push(Box::new(Toml::file(".agentcontainer/config.toml")));
+    providers.push(Box::new(Toml::file(".agentcontainer/config.local.toml")));
+    providers.push(Box::new(Env::prefixed("AGENTCONTAINER_")));
 
     // CLI dict args (volumes and environment_variables) are combined into a single provider so
     // they travel together at the same priority level.

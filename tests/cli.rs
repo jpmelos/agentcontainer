@@ -138,7 +138,7 @@ mod tests {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
-            &home_dir.path().join(".agentcontainer.toml"),
+            &home_dir.path().join(".agentcontainer/config.toml"),
             r#"dockerfile = "from-home-dotfile""#,
         );
 

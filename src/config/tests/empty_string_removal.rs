@@ -5,7 +5,7 @@ fn empty_target_in_config_file_removes_inherited_target() {
     let home_dir = tempdir().expect("Failed to create temporary directory");
     let cwd = tempdir().expect("Failed to create temporary directory");
     write_file(
-        &home_dir.path().join(".agentcontainer.toml"),
+        &home_dir.path().join(".agentcontainer/config.toml"),
         r#"target = "builder""#,
     );
     write_file(
@@ -109,7 +109,7 @@ fn empty_pre_run_in_config_file_removes_inherited_pre_run() {
     let home_dir = tempdir().expect("Failed to create temporary directory");
     let cwd = tempdir().expect("Failed to create temporary directory");
     write_file(
-        &home_dir.path().join(".agentcontainer.toml"),
+        &home_dir.path().join(".agentcontainer/config.toml"),
         r#"pre_run = "/usr/local/bin/setup.sh""#,
     );
     write_file(

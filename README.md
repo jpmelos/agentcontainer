@@ -13,14 +13,15 @@ cargo install --locked agentcontainer
 `agentcontainer` reads configuration from the following sources, listed from
 lowest to highest priority:
 
-| Source                | Path                                   |
-| --------------------- | -------------------------------------- |
-| XDG global config     | `~/.config/agentcontainer/config.toml` |
-| Home dotfile          | `~/.agentcontainer.toml`               |
-| Project config        | `.agentcontainer/config.toml`          |
-| Local project config  | `.agentcontainer/config.local.toml`    |
-| Environment variables | `AGENTCONTAINER_<KEY>`                 |
-| CLI arguments         | `--<key>` flags                        |
+| Source                | Path                                                                                                                                                                              |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| XDG global config     | `~/.config/agentcontainer/config.toml`                                                                                                                                            |
+| Home config           | `~/.agentcontainer/config.toml`                                                                                                                                                   |
+| Ancestor configs      | `{ancestor}/.agentcontainer/config.toml` for each ancestor directory from `/` towards the current working directory (excluding the CWD itself). Closer to `/` has lower priority. |
+| Project config        | `.agentcontainer/config.toml`                                                                                                                                                     |
+| Local project config  | `.agentcontainer/config.local.toml`                                                                                                                                               |
+| Environment variables | `AGENTCONTAINER_<KEY>`                                                                                                                                                            |
+| CLI arguments         | `--<key>` flags                                                                                                                                                                   |
 
 ### Configuration keys
 
