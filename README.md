@@ -72,14 +72,14 @@ embedded tildes are left untouched.
 "/unwanted" = false                   # suppress a volume defined in a lower-priority source
 ```
 
-On the CLI, use `--volume` (repeatable):
+On the CLI, use `--volume` (or `-v`) (repeatable):
 
 ```sh
 # Mount a host path into the container.
 agentcontainer build --volume '~/projects/myproject:/workspace'
 
 # Mount at the same path inside the container (same-path shorthand).
-agentcontainer build --volume /home/alice/.ssh
+agentcontainer build -v /home/alice/.ssh
 
 # Remove a volume inherited from config files.
 agentcontainer build --volume '!/unwanted'
@@ -101,17 +101,17 @@ SSH_AUTH_SOCK = true # inherit from host
 OLD_VAR = false      # suppress from a lower-priority source
 ```
 
-On the CLI, use `--environment-variable` (repeatable):
+On the CLI, use `--env` (or `--environment-variable` / `-e`) (repeatable):
 
 ```sh
 # Set a literal value.
-agentcontainer build --environment-variable EDITOR=nvim
+agentcontainer build --env EDITOR=nvim
 
 # Inherit from the host.
-agentcontainer build --environment-variable SSH_AUTH_SOCK
+agentcontainer build --env SSH_AUTH_SOCK
 
 # Remove a variable inherited from config files.
-agentcontainer build --environment-variable '!OLD_VAR'
+agentcontainer build -e '!OLD_VAR'
 ```
 
 Variable keys must be valid POSIX identifiers: start with a letter or

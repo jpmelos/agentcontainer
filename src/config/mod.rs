@@ -318,11 +318,11 @@ pub(crate) struct CliArgs {
     no_rebuild: bool,
 
     /// Volume as "host:container", "/path" (same path), or "!/path" (remove). Repeatable.
-    #[arg(long = "volume")]
+    #[arg(long = "volume", short = 'v')]
     volumes: Vec<String>,
 
     /// Environment variable as "KEY=value", "KEY" (inherit), or "!KEY" (remove). Repeatable.
-    #[arg(long = "environment-variable")]
+    #[arg(long = "environment-variable", alias = "env", short = 'e')]
     environment_variables: Vec<String>,
 
     /// Path to an executable to run before `docker run`. Its stdout is parsed as a TOML list of
