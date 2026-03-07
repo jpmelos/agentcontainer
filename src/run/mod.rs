@@ -19,6 +19,47 @@ pub(crate) enum RunError {
     Exec(#[source] IoError),
 }
 
+/// Run the agent container.
+///
+/// Assembles a `docker run` command and replaces the current process via `exec`. On success, the
+/// current process is replaced and this function never returns. On failure, returns a `RunError`.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each parameter represents a distinct concern (config, backends, process identity, \
+        filesystem context, container arguments); grouping them into a struct would add \
+        indirection without improving clarity."
+)]
+pub(crate) fn run(
+    config: &Config,
+    docker_backend: &impl DockerBackend,
+    git_context: &impl GitContext,
+    uid: u32,
+    gid: u32,
+    current_dir: &str,
+    random_suffix: u32,
+    container_args: &[String],
+    stdin_is_terminal: bool,
+) -> Result<Infallible, RunError> {
+    let main_worktree = git_context
+        .main_worktree_root(Path::new(current_dir))
+        .map_err(RunError::GitWorktree)?;
+
+    let args = build_docker_run_args(
+        config,
+        uid,
+        gid,
+        current_dir,
+        main_worktree.as_deref(),
+        random_suffix,
+        container_args,
+        stdin_is_terminal,
+    );
+
+    docker_backend
+        .exec_docker_run(&args)
+        .map_err(RunError::Exec)
+}
+
 /// Assemble the argument list for `docker run`.
 ///
 /// This is a pure function that produces the full argument vector, making it easy to test without
@@ -122,47 +163,6 @@ fn build_docker_run_args(
     args.extend_from_slice(container_args);
 
     args
-}
-
-/// Run the agent container.
-///
-/// Assembles a `docker run` command and replaces the current process via `exec`. On success, the
-/// current process is replaced and this function never returns. On failure, returns a `RunError`.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "Each parameter represents a distinct concern (config, backends, process identity, \
-        filesystem context, container arguments); grouping them into a struct would add \
-        indirection without improving clarity."
-)]
-pub(crate) fn run(
-    config: &Config,
-    docker_backend: &impl DockerBackend,
-    git_context: &impl GitContext,
-    uid: u32,
-    gid: u32,
-    current_dir: &str,
-    random_suffix: u32,
-    container_args: &[String],
-    stdin_is_terminal: bool,
-) -> Result<Infallible, RunError> {
-    let main_worktree = git_context
-        .main_worktree_root(Path::new(current_dir))
-        .map_err(RunError::GitWorktree)?;
-
-    let args = build_docker_run_args(
-        config,
-        uid,
-        gid,
-        current_dir,
-        main_worktree.as_deref(),
-        random_suffix,
-        container_args,
-        stdin_is_terminal,
-    );
-
-    docker_backend
-        .exec_docker_run(&args)
-        .map_err(RunError::Exec)
 }
 
 #[cfg(test)]
