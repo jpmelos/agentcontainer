@@ -589,6 +589,8 @@ mod default_values {
     #[test]
     fn default_username_comes_from_whoami() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = default_cli_args(Command::Config);
 
         let (_, config) = get_config(
@@ -609,6 +611,8 @@ mod default_values {
     #[test]
     fn default_target_is_none() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = default_cli_args(Command::Config);
 
         let (_, config) = get_config(
@@ -626,6 +630,8 @@ mod default_values {
     #[test]
     fn default_allow_stale_is_false() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = default_cli_args(Command::Config);
 
         let (_, config) = get_config(
@@ -643,6 +649,8 @@ mod default_values {
     #[test]
     fn default_force_rebuild_is_false() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = default_cli_args(Command::Config);
 
         let (_, config) = get_config(
@@ -660,6 +668,8 @@ mod default_values {
     #[test]
     fn default_no_build_cache_is_false() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = default_cli_args(Command::Config);
 
         let (_, config) = get_config(
@@ -677,6 +687,8 @@ mod default_values {
     #[test]
     fn default_no_rebuild_is_false() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = default_cli_args(Command::Config);
 
         let (_, config) = get_config(
