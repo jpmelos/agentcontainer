@@ -228,17 +228,16 @@ up to date, the build is skipped and the container starts immediately.
 
 The container is started with:
 
+- **`--init`**: the container uses an init process.
+- **`--rm`**: the container is automatically removed on exit.
 - **UID/GID mapping**: the container runs as the current user and group, with
   group `0` added via `--group-add`.
-- **Current directory mount**: the working directory is bind-mounted into the
+- **Current directory mount**: the working directory is mounted into the
   container at the same path and set as the container's working directory.
 - **Git worktree mount**: if the current directory is a linked Git worktree,
-  the main worktree root is also bind-mounted so that Git objects are
-  accessible.
+  the main worktree root is also mounted so that Git objects are accessible.
 - **Configured mountpoints and environment variables**: as defined in the
   configuration.
 - **TTY mode**: `-t` (allocate pseudo-TTY) and `-i` (keep stdin open) are only
   added when standard input is a TTY. This means piped or scripted invocations
   won't cause Docker to hang or emit spurious warnings.
-- **`--init` and `--rm`**: the container uses an init process and is
-  automatically removed on exit.
