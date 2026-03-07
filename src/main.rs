@@ -83,7 +83,15 @@ fn main() -> Result<()> {
     reason = "This is a CLI application that needs to print status to stderr."
 )]
 fn handle_build(config: &config::Config) -> Result<()> {
-    match build::build(config, &RealDockerBackend, &RealFilesystem, &SystemClock) {
+    let pre_build_extra_args = hooks::execute_pre_build_hook(config.pre_build.as_deref())?;
+
+    match build::build(
+        config,
+        &RealDockerBackend,
+        &RealFilesystem,
+        &SystemClock,
+        &pre_build_extra_args,
+    ) {
         Ok(BuildOutcome::SkippedNoRebuild) => {
             eprintln!("Skipping rebuild (--no-rebuild)");
         }

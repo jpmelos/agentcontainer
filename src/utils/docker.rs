@@ -1,6 +1,6 @@
 //! Abstraction over Docker CLI operations.
 
-use crate::config::Config;
+use crate::config::{BuildArgumentEntry, Config};
 use anyhow::Context as _;
 use chrono::{DateTime, Utc};
 use std::convert::Infallible;
@@ -32,12 +32,13 @@ pub(crate) trait DockerBackend {
         image_name: &str,
     ) -> Result<Option<DateTime<Utc>>, anyhow::Error>;
 
-    /// Run `docker build` with the given configuration and image name.
+    /// Run `docker build` with the given configuration, image name, and extra arguments from the
+    /// pre-build hook.
     fn run_docker_build(
         &self,
         config: &Config,
         image_name: &str,
-        build_date: &str,
+        pre_build_extra_args: &[String],
     ) -> Result<(), DockerBuildError>;
 
     /// Replace the current process with `docker run` using the given arguments.
@@ -82,7 +83,7 @@ impl DockerBackend for RealDockerBackend {
         &self,
         config: &Config,
         image_name: &str,
-        build_date: &str,
+        pre_build_extra_args: &[String],
     ) -> Result<(), DockerBuildError> {
         let mut command = Command::new("docker");
         command.arg("build");
@@ -92,14 +93,31 @@ impl DockerBackend for RealDockerBackend {
             command.args(["--target", target]);
         }
 
-        command.args(["--build-arg", &format!("USERNAME={}", config.username)]);
-        command.args(["--build-arg", &format!("BUILD_DATE={build_date}")]);
+        for (key, entry) in &config.build_arguments {
+            match *entry {
+                BuildArgumentEntry::Value(ref value) => {
+                    command.args(["--build-arg", &format!("{key}={value}")]);
+                }
+                BuildArgumentEntry::Inherit => {
+                    command.args(["--build-arg", key]);
+                }
+                BuildArgumentEntry::Remove => {
+                    unreachable!(
+                        "`Remove` entries are stripped by `clean_config` before `build` is called."
+                    )
+                }
+            }
+        }
 
         if config.no_build_cache {
             command.arg("--no-cache");
         }
 
         command.args(["-t", image_name]);
+
+        // Extra arguments from the pre-build hook.
+        command.args(pre_build_extra_args);
+
         command.arg(&config.build_context);
 
         command.stdout(Stdio::inherit());

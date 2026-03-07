@@ -5,6 +5,7 @@ use crate::utils::docker::DockerBackend;
 use crate::utils::fs::Filesystem;
 use anyhow::anyhow;
 use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone as _, Utc};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::io::Error as IoError;
@@ -23,6 +24,8 @@ fn make_config(
     Config {
         dockerfile: String::from(dockerfile),
         build_context: String::from("."),
+        build_arguments: HashMap::new(),
+        pre_build: None,
         project_name: String::from("myproject"),
         username: String::from("alice"),
         target: None,
@@ -98,6 +101,8 @@ struct MockDocker {
     existing_image_created: Result<Option<DateTime<Utc>>, anyhow::Error>,
     /// Value returned by `run_docker_build`.
     build_result: Result<(), DockerBuildError>,
+    /// Captures the `pre_build_extra_args` passed to `run_docker_build`.
+    received_pre_build_args: RefCell<Vec<String>>,
 }
 
 impl MockDocker {
@@ -106,6 +111,7 @@ impl MockDocker {
         Self {
             existing_image_created: Ok(None),
             build_result: Ok(()),
+            received_pre_build_args: RefCell::new(Vec::new()),
         }
     }
 
@@ -114,6 +120,7 @@ impl MockDocker {
         Self {
             existing_image_created: Ok(None),
             build_result: Err(make_non_zero_exit_error()),
+            received_pre_build_args: RefCell::new(Vec::new()),
         }
     }
 
@@ -122,6 +129,7 @@ impl MockDocker {
         Self {
             existing_image_created: Ok(Some(created)),
             build_result: Ok(()),
+            received_pre_build_args: RefCell::new(Vec::new()),
         }
     }
 
@@ -130,6 +138,7 @@ impl MockDocker {
         Self {
             existing_image_created: Ok(Some(created)),
             build_result: Err(make_non_zero_exit_error()),
+            received_pre_build_args: RefCell::new(Vec::new()),
         }
     }
 
@@ -138,6 +147,7 @@ impl MockDocker {
         Self {
             existing_image_created: Err(anyhow!("docker inspect failed")),
             build_result: Ok(()),
+            received_pre_build_args: RefCell::new(Vec::new()),
         }
     }
 }
@@ -157,8 +167,9 @@ impl DockerBackend for MockDocker {
         &self,
         _config: &Config,
         _image_name: &str,
-        _build_date: &str,
+        pre_build_extra_args: &[String],
     ) -> Result<(), DockerBuildError> {
+        *self.received_pre_build_args.borrow_mut() = pre_build_extra_args.to_vec();
         match self.build_result.as_ref() {
             Ok(&()) => Ok(()),
             Err(&DockerBuildError::NonZeroExit(status)) => {
@@ -236,7 +247,7 @@ mod build {
         let filesystem = MockFilesystem::with_mtime(long_ago_utc());
         let clock = MockClock::real_now();
 
-        let outcome = build(&config, &docker, &filesystem, &clock)
+        let outcome = build(&config, &docker, &filesystem, &clock, &[])
             .expect("`build` should succeed when image exists and `--no-rebuild` is set");
 
         assert!(
@@ -252,7 +263,7 @@ mod build {
         let filesystem = MockFilesystem::with_mtime(long_ago_utc());
         let clock = MockClock::real_now();
 
-        let error = build(&config, &docker, &filesystem, &clock)
+        let error = build(&config, &docker, &filesystem, &clock, &[])
             .expect_err("`build` should fail when no image exists and `--no-rebuild` is set");
 
         assert!(
@@ -272,7 +283,7 @@ mod build {
         let filesystem = MockFilesystem::with_mtime(long_ago_utc());
         let clock = MockClock::real_now();
 
-        let error = build(&config, &docker, &filesystem, &clock)
+        let error = build(&config, &docker, &filesystem, &clock, &[])
             .expect_err("`build` should propagate a timestamp fetch failure");
 
         assert!(
@@ -290,7 +301,7 @@ mod build {
         let filesystem = MockFilesystem::with_mtime(long_ago_utc());
         let clock = MockClock::real_now();
 
-        let outcome = build(&config, &docker, &filesystem, &clock)
+        let outcome = build(&config, &docker, &filesystem, &clock, &[])
             .expect("`build` should succeed with `force_rebuild`");
 
         assert!(
@@ -307,7 +318,7 @@ mod build {
         let filesystem = MockFilesystem::with_mtime(long_ago_utc());
         let clock = MockClock::real_now();
 
-        let outcome = build(&config, &docker, &filesystem, &clock)
+        let outcome = build(&config, &docker, &filesystem, &clock, &[])
             .expect("`build` should succeed when the image is up to date");
 
         assert!(
@@ -324,7 +335,7 @@ mod build {
         let filesystem = MockFilesystem::failing();
         let clock = MockClock::real_now();
 
-        let error = build(&config, &docker, &filesystem, &clock)
+        let error = build(&config, &docker, &filesystem, &clock, &[])
             .expect_err("`build` should propagate a filesystem error as a staleness check error");
 
         assert!(
@@ -340,7 +351,7 @@ mod build {
         let filesystem = MockFilesystem::with_mtime(long_ago_utc());
         let clock = MockClock::real_now();
 
-        let error = build(&config, &docker, &filesystem, &clock)
+        let error = build(&config, &docker, &filesystem, &clock, &[])
             .expect_err("`build` should fail when the build fails and there is no existing image");
 
         assert!(
@@ -362,7 +373,7 @@ mod build {
         let filesystem = MockFilesystem::with_mtime(long_ago_utc());
         let clock = MockClock::real_now();
 
-        let outcome = build(&config, &docker, &filesystem, &clock).expect(
+        let outcome = build(&config, &docker, &filesystem, &clock, &[]).expect(
             "`build` should succeed (using stale) when build fails and `--allow-stale` is set",
         );
 
@@ -379,7 +390,7 @@ mod build {
         let filesystem = MockFilesystem::with_mtime(long_ago_utc());
         let clock = MockClock::real_now();
 
-        let error = build(&config, &docker, &filesystem, &clock).expect_err(
+        let error = build(&config, &docker, &filesystem, &clock, &[]).expect_err(
             "`build` should fail when build fails, stale image exists, and `--allow-stale` is not \
              set",
         );
@@ -395,58 +406,24 @@ mod build {
     }
 
     #[test]
-    fn build_date_passed_to_docker_is_formatted_as_yyyy_mm_dd() {
-        use std::cell::Cell;
-
-        /// A `DockerBackend` that captures the `build_date` argument.
-        struct CapturingDocker {
-            /// The `build_date` string received by `run_docker_build`.
-            captured_build_date: Cell<Option<String>>,
-        }
-
-        impl DockerBackend for CapturingDocker {
-            fn fetch_image_creation_timestamp(
-                &self,
-                _image_name: &str,
-            ) -> Result<Option<DateTime<Utc>>, anyhow::Error> {
-                // No existing image, so a build will always be triggered.
-                Ok(None)
-            }
-
-            fn run_docker_build(
-                &self,
-                _config: &Config,
-                _image_name: &str,
-                build_date: &str,
-            ) -> Result<(), DockerBuildError> {
-                self.captured_build_date.set(Some(String::from(build_date)));
-                Ok(())
-            }
-
-            fn exec_docker_run(&self, _args: &[String]) -> Result<Infallible, IoError> {
-                unreachable!("Build tests do not call `exec_docker_run`")
-            }
-        }
-
+    fn pre_build_extra_args_are_forwarded_to_docker_build() {
         let config = make_config(".agentcontainer/Dockerfile", false, false, false);
-        let docker = CapturingDocker {
-            captured_build_date: Cell::new(None),
-        };
+        let docker = MockDocker::no_image_build_succeeds();
         let filesystem = MockFilesystem::with_mtime(long_ago_utc());
         let clock = MockClock::real_now();
+        let extra_args = vec![String::from("--label"), String::from("foo=bar")];
 
-        build(&config, &docker, &filesystem, &clock).expect("`build` should succeed");
+        let outcome = build(&config, &docker, &filesystem, &clock, &extra_args)
+            .expect("`build` should succeed");
 
-        let build_date = docker
-            .captured_build_date
-            .take()
-            .expect("`run_docker_build` should have been called");
-
-        // Must match `YYYY-MM-DD`.
-        let today = clock.now().format("%Y-%m-%d").to_string();
+        assert!(
+            matches!(outcome, BuildOutcome::Built),
+            "Expected `Built`, got: {outcome:?}"
+        );
         assert_eq!(
-            build_date, today,
-            "Expected build date `{today}`, got `{build_date}`"
+            *docker.received_pre_build_args.borrow(),
+            extra_args,
+            "Expected pre-build extra args to be forwarded to `run_docker_build`"
         );
     }
 }
@@ -472,7 +449,8 @@ mod should_rebuild_fn {
         let filesystem = MockFilesystem::with_mtime(long_ago_utc());
         let clock = MockClock::real_now();
 
-        let outcome = build(&config, &docker, &filesystem, &clock).expect("`build` should succeed");
+        let outcome =
+            build(&config, &docker, &filesystem, &clock, &[]).expect("`build` should succeed");
 
         assert!(
             matches!(outcome, BuildOutcome::Built),
@@ -492,7 +470,8 @@ mod should_rebuild_fn {
         let filesystem = MockFilesystem::with_mtime(dockerfile_mtime);
         let clock = MockClock::real_now();
 
-        let outcome = build(&config, &docker, &filesystem, &clock).expect("`build` should succeed");
+        let outcome =
+            build(&config, &docker, &filesystem, &clock, &[]).expect("`build` should succeed");
 
         assert!(
             matches!(outcome, BuildOutcome::Built),
@@ -511,7 +490,8 @@ mod should_rebuild_fn {
         let filesystem = MockFilesystem::with_mtime(dockerfile_mtime);
         let clock = MockClock::real_now();
 
-        let outcome = build(&config, &docker, &filesystem, &clock).expect("`build` should succeed");
+        let outcome =
+            build(&config, &docker, &filesystem, &clock, &[]).expect("`build` should succeed");
 
         assert!(
             matches!(outcome, BuildOutcome::Built),
@@ -530,7 +510,8 @@ mod should_rebuild_fn {
         let filesystem = MockFilesystem::with_mtime(dockerfile_mtime);
         let clock = MockClock::real_now();
 
-        let outcome = build(&config, &docker, &filesystem, &clock).expect("`build` should succeed");
+        let outcome =
+            build(&config, &docker, &filesystem, &clock, &[]).expect("`build` should succeed");
 
         assert!(
             matches!(outcome, BuildOutcome::UpToDate),
@@ -547,7 +528,7 @@ mod should_rebuild_fn {
         let filesystem = MockFilesystem::failing();
         let clock = MockClock::real_now();
 
-        let error = build(&config, &docker, &filesystem, &clock)
+        let error = build(&config, &docker, &filesystem, &clock, &[])
             .expect_err("`build` should propagate the filesystem error");
 
         assert!(

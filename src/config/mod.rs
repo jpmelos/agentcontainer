@@ -43,6 +43,66 @@ fn default_username() -> String {
     whoami::username().unwrap_or_else(|_| String::from("unknown"))
 }
 
+/// A build argument entry: a literal value, a host-inherited value, or a removal sentinel.
+///
+/// In TOML and environment variables: a string = literal value; `true` = inherit from host
+/// environment; `false` = remove.
+///
+/// On the CLI: `"KEY=value"` = literal value; `"KEY"` (no `=`) = inherit from host environment;
+/// `"!KEY"` = remove.
+#[derive(Debug, Clone)]
+pub(crate) enum BuildArgumentEntry {
+    /// A literal value to pass as a `--build-arg` to `docker build`.
+    Value(String),
+    /// Inherit the build argument value from the host environment.
+    Inherit,
+    /// Removal sentinel.
+    Remove,
+}
+
+impl Serialize for BuildArgumentEntry {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match *self {
+            Self::Value(ref value) => serializer.serialize_str(value),
+            Self::Inherit => serializer.serialize_bool(true),
+            Self::Remove => serializer.serialize_bool(false),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for BuildArgumentEntry {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct BuildArgumentEntryVisitor;
+
+        impl Visitor<'_> for BuildArgumentEntryVisitor {
+            type Value = BuildArgumentEntry;
+
+            fn expecting(&self, formatter: &mut Formatter<'_>) -> FmtResult {
+                formatter
+                    .write_str("a string value, `true` to inherit from host, or `false` to remove")
+            }
+
+            fn visit_str<E: DeError>(self, v: &str) -> Result<Self::Value, E> {
+                Ok(BuildArgumentEntry::Value(String::from(v)))
+            }
+
+            fn visit_string<E: DeError>(self, v: String) -> Result<Self::Value, E> {
+                Ok(BuildArgumentEntry::Value(v))
+            }
+
+            fn visit_bool<E: DeError>(self, v: bool) -> Result<Self::Value, E> {
+                if v {
+                    Ok(BuildArgumentEntry::Inherit)
+                } else {
+                    Ok(BuildArgumentEntry::Remove)
+                }
+            }
+        }
+
+        deserializer.deserialize_any(BuildArgumentEntryVisitor)
+    }
+}
+
 /// A volume entry: an explicit host path, a same-path shorthand, or a removal sentinel.
 ///
 /// In TOML and environment variables: a string = host path; `true` = mount at the same path as
@@ -183,11 +243,20 @@ pub(crate) struct Config {
     #[serde(default = "default_build_context")]
     pub(crate) build_context: String,
 
+    /// Extra build arguments to pass to `docker build`.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub(crate) build_arguments: HashMap<String, BuildArgumentEntry>,
+
+    /// Path to an executable to run before `docker build`. Its stdout is parsed as a TOML list of
+    /// extra arguments to pass to the `docker build` command.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) pre_build: Option<String>,
+
     /// Project name used in Docker image tag.
     #[serde(default = "default_project_name")]
     pub(crate) project_name: String,
 
-    /// Username for the image tag and the `USERNAME` build argument.
+    /// Username for the image tag.
     #[serde(default = "default_username")]
     pub(crate) username: String,
 
@@ -288,12 +357,20 @@ pub(crate) struct CliArgs {
     #[arg(long)]
     build_context: Option<String>,
 
+    /// Build argument as "KEY=value", "KEY" (inherit from host), or "!KEY" (remove). Repeatable.
+    #[arg(long = "build-arg")]
+    build_arguments: Vec<String>,
+
+    /// Path to an executable to run before `docker build`. Its stdout is parsed as a TOML list of
+    /// extra arguments to pass to the `docker build` command (e.g. `["--label", "foo=bar"]`).
+    #[arg(long)]
+    pre_build: Option<String>,
+
     /// Name used in Docker image tag. Defaults to the current working directory's name.
     #[arg(long)]
     project_name: Option<String>,
 
-    /// Username for image tag and `USERNAME` build argument. Defaults to the current user's
-    /// username.
+    /// Username for image tag. Defaults to the current user's username.
     #[arg(long)]
     username: Option<String>,
 
@@ -352,12 +429,24 @@ pub(crate) enum Command {
 /// Errors that can be returned from `get_config`.
 #[derive(Debug, Error)]
 pub(crate) enum ConfigError {
-    /// `force_rebuild` and `no_rebuild` were both set, which is contradictory.
-    #[error("`force_rebuild` and `no_rebuild` are mutually exclusive")]
-    ConflictingRebuildFlags,
     /// Figment failed to extract the configuration.
     #[error("Failed to load configuration: {0}")]
     Extract(Box<figment::Error>),
+    /// A build argument CLI argument could not be parsed.
+    #[error("Invalid build argument value {value:?}: expected \"KEY=value\" or \"!KEY\"")]
+    InvalidBuildArgument {
+        /// The raw value that failed parsing.
+        value: String,
+    },
+    /// A build argument key is not a valid identifier.
+    #[error(
+        "Invalid build argument key {key:?}: must start with a letter or underscore and \
+         contain only ASCII letters, digits, and underscores"
+    )]
+    InvalidBuildArgumentKey {
+        /// The key that failed validation.
+        key: String,
+    },
     /// The username contains no alphanumeric characters and cannot produce a valid slug.
     #[error("Invalid `username` value {username:?}: contains no alphanumeric characters")]
     InvalidUsername {
@@ -376,6 +465,9 @@ pub(crate) enum ConfigError {
         /// The raw target value that failed slugification.
         target: String,
     },
+    /// `force_rebuild` and `no_rebuild` were both set, which is contradictory.
+    #[error("`force_rebuild` and `no_rebuild` are mutually exclusive")]
+    ConflictingRebuildFlags,
     /// A volume value could not be parsed (bad CLI format).
     #[error(
         "Invalid volume value {value:?}: expected \"/host:/container\", \"/path\", or \
@@ -464,6 +556,9 @@ pub(crate) fn get_config<'cli_args>(
         }};
     }
 
+    // Parse CLI `--build-arg` args into a map.
+    let cli_build_args = parse_cli_build_arguments(&cli_args.build_arguments)?;
+
     // Parse CLI `--volume` args into a map.
     let cli_volumes = parse_cli_volumes(&cli_args.volumes)?;
 
@@ -503,18 +598,20 @@ pub(crate) fn get_config<'cli_args>(
     providers.push(Box::new(Toml::file(".agentcontainer/config.local.toml")));
     providers.push(Box::new(Env::prefixed("AGENTCONTAINER_")));
 
-    // CLI dict args (volumes and environment_variables) are combined into a single provider so
-    // they travel together at the same priority level.
+    // CLI dict args (build_arguments, volumes, and environment_variables) are combined into a
+    // single provider so they travel together at the same priority level.
     {
-        // We build a combined owned config struct to hold both maps so the provider satisfies the
+        // We build a combined owned config struct to hold all maps so the provider satisfies the
         // `'static` lifetime bound required by `Box<dyn Provider>`.
         #[derive(Serialize)]
         struct CliDictArgs {
+            build_arguments: HashMap<String, BuildArgumentEntry>,
             volumes: HashMap<String, VolumeEntry>,
             environment_variables: HashMap<String, EnvironmentVariableEntry>,
         }
-        if !cli_volumes.is_empty() || !cli_env_vars.is_empty() {
+        if !cli_build_args.is_empty() || !cli_volumes.is_empty() || !cli_env_vars.is_empty() {
             let cli_dict_args = CliDictArgs {
+                build_arguments: cli_build_args,
                 volumes: cli_volumes,
                 environment_variables: cli_env_vars,
             };
@@ -528,6 +625,7 @@ pub(crate) fn get_config<'cli_args>(
         providers,
         dockerfile,
         build_context,
+        pre_build,
         project_name,
         username,
         target,
@@ -550,6 +648,46 @@ pub(crate) fn get_config<'cli_args>(
     clean_config(&mut config);
 
     Ok((&cli_args.command, config))
+}
+
+/// Parse the list of `--build-arg` CLI arguments into a `HashMap<String, BuildArgumentEntry>`.
+///
+/// Accepted formats:
+/// - `"KEY=value"` → `("KEY", Value("value"))` (split on the first `=`)
+/// - `"KEY"` (no `=`) → `("KEY", Inherit)`
+/// - `"!KEY"` → `("KEY", Remove)`
+fn parse_cli_build_arguments(
+    raw_build_args: &[String],
+) -> Result<HashMap<String, BuildArgumentEntry>, ConfigError> {
+    let mut build_args = HashMap::new();
+    for raw in raw_build_args {
+        if raw.is_empty() {
+            return Err(ConfigError::InvalidBuildArgument { value: raw.clone() });
+        }
+        if let Some(key) = raw.strip_prefix('!') {
+            if !is_valid_env_var_key(key) {
+                return Err(ConfigError::InvalidBuildArgumentKey {
+                    key: String::from(key),
+                });
+            }
+            build_args.insert(String::from(key), BuildArgumentEntry::Remove);
+        } else if let Some((key, value)) = raw.split_once('=') {
+            if !is_valid_env_var_key(key) {
+                return Err(ConfigError::InvalidBuildArgumentKey {
+                    key: String::from(key),
+                });
+            }
+            build_args.insert(
+                String::from(key),
+                BuildArgumentEntry::Value(String::from(value)),
+            );
+        } else if !is_valid_env_var_key(raw) {
+            return Err(ConfigError::InvalidBuildArgumentKey { key: raw.clone() });
+        } else {
+            build_args.insert(raw.clone(), BuildArgumentEntry::Inherit);
+        }
+    }
+    Ok(build_args)
 }
 
 /// Parse the list of `--volume` CLI arguments into a `HashMap<String, VolumeEntry>`.
@@ -639,8 +777,10 @@ fn is_valid_env_var_key(key: &str) -> bool {
 
 /// Validate a fully-merged `Config`, returning the first error found.
 fn validate_config(config: &Config) -> Result<(), ConfigError> {
-    if config.force_rebuild && config.no_rebuild {
-        return Err(ConfigError::ConflictingRebuildFlags);
+    for key in config.build_arguments.keys() {
+        if !is_valid_env_var_key(key) {
+            return Err(ConfigError::InvalidBuildArgumentKey { key: key.clone() });
+        }
     }
 
     if slugify(&config.username).is_empty() {
@@ -662,6 +802,10 @@ fn validate_config(config: &Config) -> Result<(), ConfigError> {
         return Err(ConfigError::InvalidTarget {
             target: target.clone(),
         });
+    }
+
+    if config.force_rebuild && config.no_rebuild {
+        return Err(ConfigError::ConflictingRebuildFlags);
     }
 
     for container_path in config.volumes.keys() {
@@ -687,19 +831,30 @@ fn validate_config(config: &Config) -> Result<(), ConfigError> {
 /// lower-priority layer. Once merging is complete they carry no further information and are
 /// removed so that callers see only the final, actionable set of entries.
 ///
-/// For `target` and `pre_run`, an empty string acts as a removal sentinel: a higher-priority
-/// layer can set either to `""` to suppress a value inherited from a lower-priority layer.
+/// For `pre_build`, `target`, and `pre_run`, an empty string acts as a removal sentinel: a
+/// higher-priority layer can set any of them to `""` to suppress a value inherited from a
+/// lower-priority layer.
 fn clean_config(config: &mut Config) {
     config
-        .volumes
-        .retain(|_, entry| !matches!(entry, VolumeEntry::Remove));
-    config
-        .environment_variables
-        .retain(|_, entry| !matches!(entry, EnvironmentVariableEntry::Remove));
+        .build_arguments
+        .retain(|_, entry| !matches!(entry, BuildArgumentEntry::Remove));
+
+    if config.pre_build.as_deref() == Some("") {
+        config.pre_build = None;
+    }
 
     if config.target.as_deref() == Some("") {
         config.target = None;
     }
+
+    config
+        .volumes
+        .retain(|_, entry| !matches!(entry, VolumeEntry::Remove));
+
+    config
+        .environment_variables
+        .retain(|_, entry| !matches!(entry, EnvironmentVariableEntry::Remove));
+
     if config.pre_run.as_deref() == Some("") {
         config.pre_run = None;
     }

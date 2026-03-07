@@ -119,6 +119,8 @@ fn tilde_in_cli_host_path_is_expanded_to_home_dir() {
         Command::Config,
         None,
         None,
+        vec![],
+        None,
         None,
         None,
         None,

@@ -10,17 +10,17 @@ use thiserror::Error;
 /// Successful outcomes from `build` that the presentation layer may want to report.
 #[derive(Debug)]
 pub(crate) enum BuildOutcome {
-    /// The `--no-rebuild` flag was set and a valid image already exists.
-    SkippedNoRebuild,
+    /// The build succeeded.
+    Built,
     /// The image is up to date and no rebuild was necessary.
     UpToDate,
+    /// The `--no-rebuild` flag was set and a valid image already exists.
+    SkippedNoRebuild,
     /// The build failed but `--allow-stale` was set and a previous image is being used.
     UsingStaleAfterFailure {
         /// The error from the failed build attempt.
         build_error: DockerBuildError,
     },
-    /// The build succeeded.
-    Built,
 }
 
 /// Errors that can be returned from `build`.
@@ -63,6 +63,7 @@ pub(crate) fn build(
     docker: &impl DockerBackend,
     filesystem: &impl Filesystem,
     clock: &impl Clock,
+    pre_build_extra_args: &[String],
 ) -> Result<BuildOutcome, BuildError> {
     let image_name = config.get_image_name();
     let existing_image_created = docker
@@ -84,8 +85,7 @@ pub(crate) fn build(
         return Ok(BuildOutcome::UpToDate);
     }
 
-    let build_date = clock.now().format("%Y-%m-%d").to_string();
-    match docker.run_docker_build(config, &image_name, &build_date) {
+    match docker.run_docker_build(config, &image_name, pre_build_extra_args) {
         Ok(()) => Ok(BuildOutcome::Built),
         Err(build_error) => {
             if config.allow_stale && image_exists {

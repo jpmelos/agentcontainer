@@ -12,6 +12,8 @@ fn make_config() -> Config {
     Config {
         dockerfile: String::from(".agentcontainer/Dockerfile"),
         build_context: String::from("."),
+        build_arguments: HashMap::new(),
+        pre_build: None,
         project_name: String::from("myproject"),
         username: String::from("alice"),
         target: None,

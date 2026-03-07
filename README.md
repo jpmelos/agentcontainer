@@ -29,8 +29,10 @@ lowest to highest priority:
 | ----------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `dockerfile`            | `.agentcontainer/Dockerfile`                       | Path to the Dockerfile.                                                                                           |
 | `build_context`         | `.`                                                | Directory used as the Docker build context.                                                                       |
+| `build_arguments`       | _(empty)_                                          | Extra `--build-arg` flags for `docker build`. See [Build arguments](#build-arguments).                            |
+| `pre_build`             | _(none)_                                           | Path to an executable to run before `docker build`. See [Pre-build hook](#pre-build-hook).                        |
 | `project_name`          | Last component of the current directory, slugified | Name used in the Docker image tag.                                                                                |
-| `username`              | Current OS user (from `whoami`)                    | Username embedded in the image tag and passed as the `USERNAME` build argument.                                   |
+| `username`              | Current OS user (from `whoami`)                    | Username embedded in the image tag.                                                                               |
 | `target`                | _(none)_                                           | Docker build `--target`. When set, appended to the image tag.                                                     |
 | `allow_stale`           | `false`                                            | Use an existing image if the build fails, instead of returning an error.                                          |
 | `force_rebuild`         | `false`                                            | Rebuild unconditionally, bypassing the staleness check.                                                           |
@@ -42,12 +44,108 @@ lowest to highest priority:
 
 `force_rebuild` and `no_rebuild` are mutually exclusive.
 
-`target` and `pre_run` can be unset by a higher-priority source by setting them
-to an empty string. This suppresses a value inherited from a lower-priority
-source. For example, if a global config sets `target = "builder"`, a project
-config can override it with `target = ""` to build without a target. The same
-works via environment variables (`AGENTCONTAINER_TARGET=""`) and CLI
-(`--target ""`).
+`pre_build`, `target`, and `pre_run` can be unset by a higher-priority source
+by setting them to an empty string. This suppresses a value inherited from a
+lower-priority source. For example, if a global config sets
+`target = "builder"`, a project config can override it with `target = ""` to
+build without a target. The same works via environment variables
+(`AGENTCONTAINER_TARGET=""`) and CLI (`--target ""`).
+
+### Image naming
+
+The Docker image tag is derived from the resolved configuration:
+
+```
+agentcontainer_<username>_<project_name>:latest
+agentcontainer_<username>_<project_name>_<target>:latest  # when target is set
+```
+
+`username`, `project_name`, and `target` are all slugified before being
+embedded in the tag: lowercased, non-alphanumeric characters replaced with `_`,
+consecutive underscores collapsed, and leading/trailing underscores trimmed.
+
+`username` and `project_name` must contain at least one alphanumeric character.
+If the slug of either value would be empty, `get_config` returns an error.
+
+### Build arguments
+
+The `build_arguments` table defines extra `--build-arg` flags passed to
+`docker build`. Values can be:
+
+- A string: pass this literal value as a build argument.
+- `true`: inherit the value from the host environment variable with the same
+  name.
+- `false`: remove a build argument inherited from a lower-priority config
+  source.
+
+```toml
+[build_arguments]
+USERNAME = "alice"
+BUILD_DATE = "2026-03-06"
+HOME = true               # inherit from host environment
+OLD_ARG = false           # suppress from a lower-priority source
+```
+
+On the CLI, use `--build-arg` (repeatable):
+
+```sh
+# Set a literal value.
+agentcontainer build --build-arg USERNAME=alice
+
+# Inherit from the host environment.
+agentcontainer build --build-arg HOME
+
+# Remove a build argument inherited from config files.
+agentcontainer build --build-arg '!OLD_ARG'
+```
+
+Build argument keys must be valid POSIX identifiers: start with a letter or
+underscore, followed by ASCII letters, digits, or underscores.
+
+### Pre-build hook
+
+The `pre_build` option specifies a path to an executable that runs before
+`docker build`. Its stdout is parsed as a TOML array of strings, and these
+strings are injected as extra arguments to the `docker build` command (after
+all built-in flags, but before the build context).
+
+This provides a way to dynamically compute Docker build flags based on the host
+environment.
+
+**Note:** The pre-build hook runs unconditionally whenever a `build` or `run`
+command is invoked, even if the build is ultimately skipped (e.g. because the
+image is already up to date or `--no-rebuild` is set). Keep this in mind if the
+hook is expensive or has side effects.
+
+The hook must:
+
+- Exit with status 0.
+- Print a valid TOML array of strings to stdout (e.g.
+  `["--label", "foo=bar"]`).
+- Produce valid UTF-8 output.
+
+Example hook script:
+
+```sh
+#!/bin/sh
+cat <<EOF
+[
+    "--build-arg", "BUILD_DATE=$(date "+%Y-%m-%d")"
+]
+EOF
+```
+
+In TOML configuration:
+
+```toml
+pre_build = "./hooks/pre-build.sh"
+```
+
+On the CLI:
+
+```sh
+agentcontainer build --pre-build ./hooks/pre-build.sh
+```
 
 ### Volumes
 
@@ -153,22 +251,6 @@ On the CLI:
 agentcontainer run --pre-run ./hooks/pre-run.sh
 ```
 
-### Image naming
-
-The Docker image tag is derived from the resolved configuration:
-
-```
-agentcontainer_<username>_<project_name>:latest
-agentcontainer_<username>_<project_name>_<target>:latest  # when target is set
-```
-
-`username`, `project_name`, and `target` are all slugified before being
-embedded in the tag: lowercased, non-alphanumeric characters replaced with `_`,
-consecutive underscores collapsed, and leading/trailing underscores trimmed.
-
-`username` and `project_name` must contain at least one alphanumeric character.
-If the slug of either value would be empty, `get_config` returns an error.
-
 ### Container naming
 
 When running a container, the name is derived from the project name and a
@@ -210,6 +292,7 @@ AGENTCONTAINER_DOCKERFILE=".agentcontainer/Dockerfile"
 AGENTCONTAINER_BUILD_CONTEXT="."
 AGENTCONTAINER_VOLUMES='{"/workspace" = "~/projects/myproject", "~/.ssh" = true}'
 AGENTCONTAINER_ENVIRONMENT_VARIABLES='{EDITOR = "nvim", SSH_AUTH_SOCK = true}'
+AGENTCONTAINER_BUILD_ARGUMENTS='{BUILD_DATE = "2026-03-06", HOME = true}'
 AGENTCONTAINER_ALLOW_STALE=true # or `false`
 ```
 
@@ -238,13 +321,6 @@ when any of the following is true:
 - The Dockerfile was modified after the image was created.
 - The image was created before the start of today (local time).
 - `force_rebuild` is set.
-
-The following build arguments are passed automatically:
-
-| Build argument | Value                                |
-| -------------- | ------------------------------------ |
-| `USERNAME`     | The raw `username` config value.     |
-| `BUILD_DATE`   | Today's date in `YYYY-MM-DD` format. |
 
 ### `run`
 

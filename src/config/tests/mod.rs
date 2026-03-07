@@ -1,3 +1,4 @@
+mod build_arguments;
 mod empty_string_removal;
 mod environment_variables;
 mod get_container_name;
@@ -6,7 +7,8 @@ mod tilde_expansion;
 mod volumes;
 
 use super::{
-    CliArgs, Command, Config, ConfigError, EnvironmentVariableEntry, VolumeEntry, get_config,
+    BuildArgumentEntry, CliArgs, Command, Config, ConfigError, EnvironmentVariableEntry,
+    VolumeEntry, get_config,
 };
 use std::{collections::HashMap, env, fs, path::Path};
 use tempfile::tempdir;
@@ -25,6 +27,8 @@ impl CliArgs {
         command: Command,
         dockerfile: Option<String>,
         build_context: Option<String>,
+        build_arguments: Vec<String>,
+        pre_build: Option<String>,
         project_name: Option<String>,
         username: Option<String>,
         target: Option<String>,
@@ -39,6 +43,8 @@ impl CliArgs {
         Self {
             dockerfile,
             build_context,
+            build_arguments,
+            pre_build,
             project_name,
             username,
             target,
@@ -72,6 +78,8 @@ fn default_cli_args(command: Command) -> CliArgs {
         command,
         None,
         None,
+        vec![],
+        None,
         None,
         None,
         None,
@@ -90,6 +98,8 @@ fn make_config() -> Config {
     Config {
         dockerfile: String::from(".agentcontainer/Dockerfile"),
         build_context: String::from("."),
+        build_arguments: HashMap::new(),
+        pre_build: None,
         project_name: String::from("myproject"),
         username: String::from("alice"),
         target: None,
@@ -265,6 +275,8 @@ mod configuration_sources_are_read {
         let cli_args = CliArgs::new(
             Command::Config,
             Some(String::from("from-cli")),
+            None,
+            vec![],
             None,
             None,
             None,
@@ -512,6 +524,8 @@ mod configuration_sources_priority_order {
             Command::Config,
             Some(String::from("from-cli")),
             None,
+            vec![],
+            None,
             None,
             None,
             None,
@@ -565,6 +579,8 @@ mod configuration_sources_priority_order {
         let cli_args = CliArgs::new(
             Command::Config,
             Some(String::from("from-cli")),
+            None,
+            vec![],
             None,
             None,
             None,
@@ -841,6 +857,8 @@ mod validation {
             Command::Config,
             None,
             None,
+            vec![],
+            None,
             Some(String::from("myproject")),
             Some(String::from("@@@")),
             None,
@@ -875,6 +893,8 @@ mod validation {
             Command::Config,
             None,
             None,
+            vec![],
+            None,
             Some(String::from("@@@")),
             Some(String::from("alice")),
             None,
@@ -907,6 +927,8 @@ mod validation {
         let cli_args = CliArgs::new(
             Command::Config,
             None,
+            None,
+            vec![],
             None,
             Some(String::from("myproject")),
             Some(String::from("alice")),
@@ -941,6 +963,8 @@ mod validation {
         let cli_args = CliArgs::new(
             Command::Build,
             None,
+            None,
+            vec![],
             None,
             None,
             None,
