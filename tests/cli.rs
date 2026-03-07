@@ -16,15 +16,15 @@ mod tests {
     /// Write content to a file, creating parent directories as needed.
     fn write_file(path: &Path, content: &str) {
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).expect("Failed to create parent directories for test file.");
+            fs::create_dir_all(parent).expect("Failed to create parent directories for test file");
         }
-        fs::write(path, content).expect("Failed to write test file.");
+        fs::write(path, content).expect("Failed to write test file");
     }
 
     #[test]
     fn config_subcommand_prints_default_config() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
-        let cwd = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
 
         // Compute the expected `project_name` default the same way the production code does:
         // the last component of the CWD path, as-is.
@@ -69,8 +69,8 @@ mod tests {
 
     #[test]
     fn config_subcommand_respects_dockerfile_cli_flag() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
-        let cwd = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
 
         Command::new(cargo_bin!("agentcontainer"))
             .args(["--dockerfile", "custom.Dockerfile", "config"])
@@ -83,8 +83,8 @@ mod tests {
 
     #[test]
     fn config_subcommand_respects_env_var() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
-        let cwd = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
 
         Command::new(cargo_bin!("agentcontainer"))
             .arg("config")
@@ -98,8 +98,8 @@ mod tests {
 
     #[test]
     fn config_subcommand_respects_cwd_config_file() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
-        let cwd = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
             r#"dockerfile = "from-cwd""#,
@@ -116,8 +116,8 @@ mod tests {
 
     #[test]
     fn config_subcommand_respects_cwd_local_config_file() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
-        let cwd = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
             &cwd.path().join(".agentcontainer/config.local.toml"),
             r#"dockerfile = "from-cwd-local""#,
@@ -134,8 +134,8 @@ mod tests {
 
     #[test]
     fn config_subcommand_respects_home_dotfile() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
-        let cwd = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
             &home_dir.path().join(".agentcontainer.toml"),
             r#"dockerfile = "from-home-dotfile""#,
@@ -152,8 +152,8 @@ mod tests {
 
     #[test]
     fn config_subcommand_respects_xdg_config_file() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
-        let cwd = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
             &home_dir.path().join(".config/agentcontainer/config.toml"),
             r#"dockerfile = "from-xdg""#,

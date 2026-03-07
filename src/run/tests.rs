@@ -132,7 +132,7 @@ mod build_docker_run_args {
         let volume_count = args.iter().filter(|arg| *arg == "-v").count();
         assert_eq!(
             volume_count, 1,
-            "Expected exactly one `-v` flag, got {volume_count}."
+            "Expected exactly one `-v` flag, got {volume_count}"
         );
     }
 
@@ -202,9 +202,9 @@ mod build_docker_run_args {
 
         let expected_image = config.get_image_name();
         assert_eq!(
-            args.last().expect("Args should not be empty."),
+            args.last().expect("Args should not be empty"),
             &expected_image,
-            "Image name should be the last argument."
+            "Image name should be the last argument"
         );
     }
 }

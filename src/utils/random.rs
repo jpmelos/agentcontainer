@@ -26,10 +26,10 @@ mod tests {
     fn suffix_is_in_valid_range() {
         for _ in 0..100 {
             let suffix = random_name_suffix();
-            assert!(suffix >= 1, "Suffix {suffix} is below minimum 1.");
+            assert!(suffix >= 1, "Suffix {suffix} is below minimum 1");
             assert!(
                 suffix <= 999_999,
-                "Suffix {suffix} is above maximum 999_999."
+                "Suffix {suffix} is above maximum 999_999"
             );
         }
     }

@@ -39,15 +39,15 @@ fn main() -> Result<()> {
         Command::Build => {
             match build::build(&config, &RealDockerBackend, &RealFilesystem, &SystemClock) {
                 Ok(BuildOutcome::SkippedNoRebuild) => {
-                    eprintln!("Skipping rebuild (--no-rebuild).");
+                    eprintln!("Skipping rebuild (--no-rebuild)");
                 }
                 Ok(BuildOutcome::UpToDate) => {
-                    eprintln!("Image is up to date, skipping build.");
+                    eprintln!("Image is up to date, skipping build");
                 }
                 Ok(BuildOutcome::Built) => {}
                 Ok(BuildOutcome::UsingStaleAfterFailure { build_error }) => {
                     eprintln!("Warning: build failed: {build_error}");
-                    eprintln!("Build failed but `--allow-stale` is set; using existing image.");
+                    eprintln!("Build failed but `--allow-stale` is set; using existing image");
                 }
                 Err(error) => {
                     return Err(error.into());

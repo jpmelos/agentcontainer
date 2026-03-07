@@ -6,17 +6,17 @@ use tempfile::tempdir;
 
 #[test]
 fn default_mountpoints_is_empty() {
-    let home_dir = tempdir().expect("Failed to create temporary directory.");
+    let home_dir = tempdir().expect("Failed to create temporary directory");
     let cli_args = default_cli_args(Command::Config);
 
     let (_, config) = get_config(
         home_dir
             .path()
             .to_str()
-            .expect("Temporary directory path is not valid UTF-8."),
+            .expect("Temporary directory path is not valid UTF-8"),
         &cli_args,
     )
-    .expect("`get_config` failed.");
+    .expect("`get_config` failed");
 
     assert!(config.mountpoints.is_empty());
 }
@@ -26,8 +26,8 @@ mod parsing_toml {
 
     #[test]
     fn single_toml_file_with_mountpoints_is_read_correctly() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
-        let cwd = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
             r#"
@@ -36,17 +36,17 @@ mod parsing_toml {
             "/other" = false
             "#,
         );
-        env::set_current_dir(cwd.path()).expect("Failed to set current directory.");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = default_cli_args(Command::Config);
 
         let (_, config) = get_config(
             home_dir
                 .path()
                 .to_str()
-                .expect("Temporary directory path is not valid UTF-8."),
+                .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect("`get_config` failed.");
+        .expect("`get_config` failed");
 
         assert!(matches!(
             config.mountpoints.get("/container"),
@@ -57,8 +57,8 @@ mod parsing_toml {
 
     #[test]
     fn two_toml_files_with_different_container_paths_are_unioned() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
-        let cwd = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
             r#"
@@ -73,17 +73,17 @@ mod parsing_toml {
             "/container2" = "/host2"
             "#,
         );
-        env::set_current_dir(cwd.path()).expect("Failed to set current directory.");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = default_cli_args(Command::Config);
 
         let (_, config) = get_config(
             home_dir
                 .path()
                 .to_str()
-                .expect("Temporary directory path is not valid UTF-8."),
+                .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect("`get_config` failed.");
+        .expect("`get_config` failed");
 
         assert!(matches!(
             config.mountpoints.get("/container1"),
@@ -97,8 +97,8 @@ mod parsing_toml {
 
     #[test]
     fn two_toml_files_with_same_container_path_later_wins() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
-        let cwd = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
             r#"
@@ -113,17 +113,17 @@ mod parsing_toml {
             "/container" = "/host-from-cwd-local"
             "#,
         );
-        env::set_current_dir(cwd.path()).expect("Failed to set current directory.");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = default_cli_args(Command::Config);
 
         let (_, config) = get_config(
             home_dir
                 .path()
                 .to_str()
-                .expect("Temporary directory path is not valid UTF-8."),
+                .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect("`get_config` failed.");
+        .expect("`get_config` failed");
 
         assert!(matches!(
             config.mountpoints.get("/container"),
@@ -133,8 +133,8 @@ mod parsing_toml {
 
     #[test]
     fn toml_same_path_format_is_parsed_correctly() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
-        let cwd = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
             r#"
@@ -142,17 +142,17 @@ mod parsing_toml {
             "/container" = true
             "#,
         );
-        env::set_current_dir(cwd.path()).expect("Failed to set current directory.");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = default_cli_args(Command::Config);
 
         let (_, config) = get_config(
             home_dir
                 .path()
                 .to_str()
-                .expect("Temporary directory path is not valid UTF-8."),
+                .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect("`get_config` failed.");
+        .expect("`get_config` failed");
 
         assert!(
             matches!(
@@ -166,8 +166,8 @@ mod parsing_toml {
 
     #[test]
     fn toml_host_container_with_relative_host_path_is_accepted() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
-        let cwd = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
             r#"
@@ -175,17 +175,17 @@ mod parsing_toml {
             "/container" = "relative-host"
             "#,
         );
-        env::set_current_dir(cwd.path()).expect("Failed to set current directory.");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = default_cli_args(Command::Config);
 
         let (_, config) = get_config(
             home_dir
                 .path()
                 .to_str()
-                .expect("Temporary directory path is not valid UTF-8."),
+                .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect("`get_config` should accept a relative host path.");
+        .expect("`get_config` should accept a relative host path");
 
         assert!(matches!(
             config.mountpoints.get("/container"),
@@ -199,7 +199,7 @@ mod parsing_env_var {
 
     #[test]
     fn env_var_same_path_mountpoint_is_parsed_correctly() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
         // SAFETY: `set_var` is safe here because `cargo nextest` runs each test in its own process,
         // so there are no other threads to race with.
         unsafe {
@@ -211,10 +211,10 @@ mod parsing_env_var {
             home_dir
                 .path()
                 .to_str()
-                .expect("Temporary directory path is not valid UTF-8."),
+                .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect("`get_config` failed.");
+        .expect("`get_config` failed");
 
         assert!(
             matches!(
@@ -232,7 +232,7 @@ mod parsing_cli_args {
 
     #[test]
     fn cli_mountpoint_host_container_format_is_parsed_correctly() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
         let cli_args = CliArgs::new(
             Command::Config,
             None,
@@ -252,10 +252,10 @@ mod parsing_cli_args {
             home_dir
                 .path()
                 .to_str()
-                .expect("Temporary directory path is not valid UTF-8."),
+                .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect("`get_config` failed.");
+        .expect("`get_config` failed");
 
         assert!(matches!(
             config.mountpoints.get("/container"),
@@ -265,7 +265,7 @@ mod parsing_cli_args {
 
     #[test]
     fn cli_mountpoint_same_path_format_is_parsed_correctly() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
         let cli_args = CliArgs::new(
             Command::Config,
             None,
@@ -285,10 +285,10 @@ mod parsing_cli_args {
             home_dir
                 .path()
                 .to_str()
-                .expect("Temporary directory path is not valid UTF-8."),
+                .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect("`get_config` failed.");
+        .expect("`get_config` failed");
 
         assert!(
             matches!(
@@ -302,8 +302,8 @@ mod parsing_cli_args {
 
     #[test]
     fn cli_mountpoint_removal_format_sets_remove() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
-        let cwd = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
             r#"
@@ -311,7 +311,7 @@ mod parsing_cli_args {
             "/container" = "/host-from-cwd"
             "#,
         );
-        env::set_current_dir(cwd.path()).expect("Failed to set current directory.");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgs::new(
             Command::Config,
             None,
@@ -331,17 +331,17 @@ mod parsing_cli_args {
             home_dir
                 .path()
                 .to_str()
-                .expect("Temporary directory path is not valid UTF-8."),
+                .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect("`get_config` failed.");
+        .expect("`get_config` failed");
 
         assert!(!config.mountpoints.contains_key("/container"));
     }
 
     #[test]
     fn cli_host_container_with_relative_host_path_is_accepted() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
         let cli_args = CliArgs::new(
             Command::Config,
             None,
@@ -361,10 +361,10 @@ mod parsing_cli_args {
             home_dir
                 .path()
                 .to_str()
-                .expect("Temporary directory path is not valid UTF-8."),
+                .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect("`get_config` should accept a relative host path.");
+        .expect("`get_config` should accept a relative host path");
 
         assert!(matches!(
             config.mountpoints.get("/container"),
@@ -378,8 +378,8 @@ mod priority {
 
     #[test]
     fn cli_mountpoint_overrides_toml_for_same_container_path() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
-        let cwd = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
             r#"
@@ -387,7 +387,7 @@ mod priority {
             "/container" = "/host-from-toml"
             "#,
         );
-        env::set_current_dir(cwd.path()).expect("Failed to set current directory.");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgs::new(
             Command::Config,
             None,
@@ -407,10 +407,10 @@ mod priority {
             home_dir
                 .path()
                 .to_str()
-                .expect("Temporary directory path is not valid UTF-8."),
+                .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect("`get_config` failed.");
+        .expect("`get_config` failed");
 
         assert!(matches!(
             config.mountpoints.get("/container"),
@@ -420,8 +420,8 @@ mod priority {
 
     #[test]
     fn cli_same_path_overrides_toml_active_for_same_container_path() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
-        let cwd = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
             r#"
@@ -429,7 +429,7 @@ mod priority {
             "/data" = "/host/data"
             "#,
         );
-        env::set_current_dir(cwd.path()).expect("Failed to set current directory.");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgs::new(
             Command::Config,
             None,
@@ -449,10 +449,10 @@ mod priority {
             home_dir
                 .path()
                 .to_str()
-                .expect("Temporary directory path is not valid UTF-8."),
+                .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect("`get_config` failed.");
+        .expect("`get_config` failed");
 
         assert!(
             matches!(
@@ -466,8 +466,8 @@ mod priority {
 
     #[test]
     fn toml_same_path_can_be_overridden_by_higher_priority_toml_active() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
-        let cwd = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
             r#"
@@ -482,17 +482,17 @@ mod priority {
             "/data" = "/other/host/path"
             "#,
         );
-        env::set_current_dir(cwd.path()).expect("Failed to set current directory.");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = default_cli_args(Command::Config);
 
         let (_, config) = get_config(
             home_dir
                 .path()
                 .to_str()
-                .expect("Temporary directory path is not valid UTF-8."),
+                .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect("`get_config` failed.");
+        .expect("`get_config` failed");
 
         assert!(matches!(
             config.mountpoints.get("/data"),
@@ -506,7 +506,7 @@ mod validation {
 
     #[test]
     fn cli_mountpoint_empty_string_triggers_invalid_mountpoint_error() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
         let cli_args = CliArgs::new(
             Command::Config,
             None,
@@ -526,10 +526,10 @@ mod validation {
             home_dir
                 .path()
                 .to_str()
-                .expect("Temporary directory path is not valid UTF-8."),
+                .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect_err("Expected `get_config` to fail with an empty mountpoint argument.");
+        .expect_err("Expected `get_config` to fail with an empty mountpoint argument");
 
         assert!(
             matches!(error, ConfigError::InvalidMountpoint { .. }),
@@ -539,7 +539,7 @@ mod validation {
 
     #[test]
     fn malformed_cli_mountpoint_empty_host_triggers_invalid_mountpoint_error() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
         let cli_args = CliArgs::new(
             Command::Config,
             None,
@@ -559,10 +559,10 @@ mod validation {
             home_dir
                 .path()
                 .to_str()
-                .expect("Temporary directory path is not valid UTF-8."),
+                .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect_err("Expected `get_config` to fail with an empty host path.");
+        .expect_err("Expected `get_config` to fail with an empty host path");
 
         assert!(
             matches!(error, ConfigError::InvalidMountpoint { .. }),
@@ -572,7 +572,7 @@ mod validation {
 
     #[test]
     fn malformed_cli_mountpoint_empty_container_path_triggers_invalid_mountpoint_error() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
         let cli_args = CliArgs::new(
             Command::Config,
             None,
@@ -592,10 +592,10 @@ mod validation {
             home_dir
                 .path()
                 .to_str()
-                .expect("Temporary directory path is not valid UTF-8."),
+                .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect_err("Expected `get_config` to fail with an empty container path.");
+        .expect_err("Expected `get_config` to fail with an empty container path");
 
         assert!(
             matches!(error, ConfigError::InvalidMountpoint { .. }),
@@ -605,7 +605,7 @@ mod validation {
 
     #[test]
     fn cli_mountpoint_removal_with_colon_in_container_path_triggers_invalid_mountpoint_error() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
         let cli_args = CliArgs::new(
             Command::Config,
             None,
@@ -625,10 +625,10 @@ mod validation {
             home_dir
                 .path()
                 .to_str()
-                .expect("Temporary directory path is not valid UTF-8."),
+                .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect_err("Expected `get_config` to fail with a colon in the removal container path.");
+        .expect_err("Expected `get_config` to fail with a colon in the removal container path");
 
         assert!(
             matches!(error, ConfigError::InvalidMountpoint { .. }),
@@ -638,7 +638,7 @@ mod validation {
 
     #[test]
     fn cli_mountpoint_with_multiple_colons_triggers_invalid_mountpoint_error() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
         let cli_args = CliArgs::new(
             Command::Config,
             None,
@@ -658,10 +658,10 @@ mod validation {
             home_dir
                 .path()
                 .to_str()
-                .expect("Temporary directory path is not valid UTF-8."),
+                .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect_err("Expected `get_config` to fail with multiple colons.");
+        .expect_err("Expected `get_config` to fail with multiple colons");
 
         assert!(
             matches!(error, ConfigError::InvalidMountpoint { .. }),
@@ -671,7 +671,7 @@ mod validation {
 
     #[test]
     fn cli_same_path_with_relative_path_triggers_invalid_mountpoint_path_error() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
         let cli_args = CliArgs::new(
             Command::Config,
             None,
@@ -691,10 +691,10 @@ mod validation {
             home_dir
                 .path()
                 .to_str()
-                .expect("Temporary directory path is not valid UTF-8."),
+                .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect_err("Expected `get_config` to fail with a relative same-path mountpoint.");
+        .expect_err("Expected `get_config` to fail with a relative same-path mountpoint");
 
         assert!(
             matches!(error, ConfigError::InvalidMountpointPath { .. }),
@@ -704,7 +704,7 @@ mod validation {
 
     #[test]
     fn cli_host_container_with_relative_container_path_triggers_invalid_mountpoint_path_error() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
         let cli_args = CliArgs::new(
             Command::Config,
             None,
@@ -724,10 +724,10 @@ mod validation {
             home_dir
                 .path()
                 .to_str()
-                .expect("Temporary directory path is not valid UTF-8."),
+                .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect_err("Expected `get_config` to fail with a relative container path.");
+        .expect_err("Expected `get_config` to fail with a relative container path");
 
         assert!(
             matches!(error, ConfigError::InvalidMountpointPath { .. }),
@@ -737,8 +737,8 @@ mod validation {
 
     #[test]
     fn toml_mountpoint_with_relative_container_path_triggers_invalid_mountpoint_path_error() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
-        let cwd = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
             r#"
@@ -746,17 +746,17 @@ mod validation {
             "relative" = "/host"
             "#,
         );
-        env::set_current_dir(cwd.path()).expect("Failed to set current directory.");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = default_cli_args(Command::Config);
 
         let error = get_config(
             home_dir
                 .path()
                 .to_str()
-                .expect("Temporary directory path is not valid UTF-8."),
+                .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect_err("Expected `get_config` to fail with a relative container path in TOML.");
+        .expect_err("Expected `get_config` to fail with a relative container path in TOML");
 
         assert!(
             matches!(error, ConfigError::InvalidMountpointPath { .. }),
@@ -766,8 +766,8 @@ mod validation {
 
     #[test]
     fn toml_same_path_with_relative_path_triggers_invalid_mountpoint_path_error() {
-        let home_dir = tempdir().expect("Failed to create temporary directory.");
-        let cwd = tempdir().expect("Failed to create temporary directory.");
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
             r#"
@@ -775,17 +775,17 @@ mod validation {
             "relative" = true
             "#,
         );
-        env::set_current_dir(cwd.path()).expect("Failed to set current directory.");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = default_cli_args(Command::Config);
 
         let error = get_config(
             home_dir
                 .path()
                 .to_str()
-                .expect("Temporary directory path is not valid UTF-8."),
+                .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect_err("Expected `get_config` to fail with a relative same-path mountpoint in TOML.");
+        .expect_err("Expected `get_config` to fail with a relative same-path mountpoint in TOML");
 
         assert!(
             matches!(error, ConfigError::InvalidMountpointPath { .. }),

@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn image_name_without_target() {
-    let home_dir = tempdir().expect("Failed to create temporary directory.");
+    let home_dir = tempdir().expect("Failed to create temporary directory");
     let cli_args = CliArgs::new(
         Command::Config,
         None,
@@ -22,10 +22,10 @@ fn image_name_without_target() {
         home_dir
             .path()
             .to_str()
-            .expect("Temporary directory path is not valid UTF-8."),
+            .expect("Temporary directory path is not valid UTF-8"),
         &cli_args,
     )
-    .expect("`get_config` failed.");
+    .expect("`get_config` failed");
 
     assert_eq!(
         config.get_image_name(),
@@ -35,7 +35,7 @@ fn image_name_without_target() {
 
 #[test]
 fn image_name_with_target() {
-    let home_dir = tempdir().expect("Failed to create temporary directory.");
+    let home_dir = tempdir().expect("Failed to create temporary directory");
     let cli_args = CliArgs::new(
         Command::Config,
         None,
@@ -55,10 +55,10 @@ fn image_name_with_target() {
         home_dir
             .path()
             .to_str()
-            .expect("Temporary directory path is not valid UTF-8."),
+            .expect("Temporary directory path is not valid UTF-8"),
         &cli_args,
     )
-    .expect("`get_config` failed.");
+    .expect("`get_config` failed");
 
     assert_eq!(
         config.get_image_name(),
@@ -68,7 +68,7 @@ fn image_name_with_target() {
 
 #[test]
 fn image_name_slugifies_project_name() {
-    let home_dir = tempdir().expect("Failed to create temporary directory.");
+    let home_dir = tempdir().expect("Failed to create temporary directory");
     let cli_args = CliArgs::new(
         Command::Config,
         None,
@@ -88,10 +88,10 @@ fn image_name_slugifies_project_name() {
         home_dir
             .path()
             .to_str()
-            .expect("Temporary directory path is not valid UTF-8."),
+            .expect("Temporary directory path is not valid UTF-8"),
         &cli_args,
     )
-    .expect("`get_config` failed.");
+    .expect("`get_config` failed");
 
     assert_eq!(
         config.get_image_name(),
@@ -101,7 +101,7 @@ fn image_name_slugifies_project_name() {
 
 #[test]
 fn image_name_slugifies_username() {
-    let home_dir = tempdir().expect("Failed to create temporary directory.");
+    let home_dir = tempdir().expect("Failed to create temporary directory");
     let cli_args = CliArgs::new(
         Command::Config,
         None,
@@ -121,10 +121,10 @@ fn image_name_slugifies_username() {
         home_dir
             .path()
             .to_str()
-            .expect("Temporary directory path is not valid UTF-8."),
+            .expect("Temporary directory path is not valid UTF-8"),
         &cli_args,
     )
-    .expect("`get_config` failed.");
+    .expect("`get_config` failed");
 
     assert_eq!(
         config.get_image_name(),
@@ -134,7 +134,7 @@ fn image_name_slugifies_username() {
 
 #[test]
 fn image_name_slugifies_target() {
-    let home_dir = tempdir().expect("Failed to create temporary directory.");
+    let home_dir = tempdir().expect("Failed to create temporary directory");
     let cli_args = CliArgs::new(
         Command::Config,
         None,
@@ -154,10 +154,10 @@ fn image_name_slugifies_target() {
         home_dir
             .path()
             .to_str()
-            .expect("Temporary directory path is not valid UTF-8."),
+            .expect("Temporary directory path is not valid UTF-8"),
         &cli_args,
     )
-    .expect("`get_config` failed.");
+    .expect("`get_config` failed");
 
     assert_eq!(
         config.get_image_name(),
