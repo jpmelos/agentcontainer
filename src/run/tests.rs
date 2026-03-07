@@ -47,19 +47,85 @@ mod build_docker_run_args {
     #[test]
     fn includes_fixed_flags() {
         let config = make_config();
-        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42, &[]);
+        let args = build_docker_run_args(
+            &config,
+            1000,
+            1000,
+            "/home/user/project",
+            None,
+            42,
+            &[],
+            false,
+        );
 
-        assert_eq!(args[0], "run");
-        assert_eq!(args[1], "-t");
-        assert_eq!(args[2], "-i");
-        assert_eq!(args[3], "--init");
-        assert_eq!(args[4], "--rm");
+        assert_eq!(
+            &args[..3],
+            &["run", "--init", "--rm"],
+            "Fixed flags must appear at the start in this exact order: {args:?}"
+        );
+    }
+
+    #[test]
+    fn includes_tty_flags_when_stdin_is_terminal() {
+        let config = make_config();
+        let args = build_docker_run_args(
+            &config,
+            1000,
+            1000,
+            "/home/user/project",
+            None,
+            42,
+            &[],
+            true,
+        );
+
+        assert!(
+            args.contains(&String::from("-t")),
+            "`-t` should be present when stdin is a TTY: {args:?}"
+        );
+        assert!(
+            args.contains(&String::from("-i")),
+            "`-i` should be present when stdin is a TTY: {args:?}"
+        );
+    }
+
+    #[test]
+    fn omits_tty_flags_when_stdin_is_not_terminal() {
+        let config = make_config();
+        let args = build_docker_run_args(
+            &config,
+            1000,
+            1000,
+            "/home/user/project",
+            None,
+            42,
+            &[],
+            false,
+        );
+
+        assert!(
+            !args.contains(&String::from("-t")),
+            "`-t` should not be present when stdin is not a TTY: {args:?}"
+        );
+        assert!(
+            !args.contains(&String::from("-i")),
+            "`-i` should not be present when stdin is not a TTY: {args:?}"
+        );
     }
 
     #[test]
     fn includes_user_mapping() {
         let config = make_config();
-        let args = build_docker_run_args(&config, 1000, 1001, "/home/user/project", None, 42, &[]);
+        let args = build_docker_run_args(
+            &config,
+            1000,
+            1001,
+            "/home/user/project",
+            None,
+            42,
+            &[],
+            true,
+        );
 
         assert!(
             has_flag_pair(&args, "--user", "1000:1001"),
@@ -74,7 +140,16 @@ mod build_docker_run_args {
     #[test]
     fn includes_container_name() {
         let config = make_config();
-        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42, &[]);
+        let args = build_docker_run_args(
+            &config,
+            1000,
+            1000,
+            "/home/user/project",
+            None,
+            42,
+            &[],
+            true,
+        );
 
         assert!(
             has_flag_pair(&args, "--name", "agentcontainer_myproject_42"),
@@ -85,7 +160,16 @@ mod build_docker_run_args {
     #[test]
     fn includes_working_directory() {
         let config = make_config();
-        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42, &[]);
+        let args = build_docker_run_args(
+            &config,
+            1000,
+            1000,
+            "/home/user/project",
+            None,
+            42,
+            &[],
+            true,
+        );
 
         assert!(
             has_flag_pair(&args, "-w", "/home/user/project"),
@@ -96,7 +180,16 @@ mod build_docker_run_args {
     #[test]
     fn includes_current_dir_mount() {
         let config = make_config();
-        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42, &[]);
+        let args = build_docker_run_args(
+            &config,
+            1000,
+            1000,
+            "/home/user/project",
+            None,
+            42,
+            &[],
+            true,
+        );
 
         assert!(
             has_flag_pair(&args, "-v", "/home/user/project:/home/user/project"),
@@ -116,6 +209,7 @@ mod build_docker_run_args {
             Some(&worktree),
             42,
             &[],
+            true,
         );
 
         assert!(
@@ -127,7 +221,16 @@ mod build_docker_run_args {
     #[test]
     fn no_worktree_mount_when_absent() {
         let config = make_config();
-        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42, &[]);
+        let args = build_docker_run_args(
+            &config,
+            1000,
+            1000,
+            "/home/user/project",
+            None,
+            42,
+            &[],
+            true,
+        );
 
         // Only one -v flag (for the current dir).
         let volume_count = args.iter().filter(|arg| *arg == "-v").count();
@@ -144,7 +247,16 @@ mod build_docker_run_args {
             String::from("/container/path"),
             MountpointEntry::Active(String::from("/host/path")),
         );
-        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42, &[]);
+        let args = build_docker_run_args(
+            &config,
+            1000,
+            1000,
+            "/home/user/project",
+            None,
+            42,
+            &[],
+            true,
+        );
 
         assert!(
             has_flag_pair(&args, "-v", "/host/path:/container/path"),
@@ -158,7 +270,16 @@ mod build_docker_run_args {
         config
             .mountpoints
             .insert(String::from("/shared/data"), MountpointEntry::SamePath);
-        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42, &[]);
+        let args = build_docker_run_args(
+            &config,
+            1000,
+            1000,
+            "/home/user/project",
+            None,
+            42,
+            &[],
+            true,
+        );
 
         assert!(
             has_flag_pair(&args, "-v", "/shared/data:/shared/data"),
@@ -173,7 +294,16 @@ mod build_docker_run_args {
             String::from("MY_VAR"),
             EnvironmentVariableEntry::Value(String::from("my_value")),
         );
-        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42, &[]);
+        let args = build_docker_run_args(
+            &config,
+            1000,
+            1000,
+            "/home/user/project",
+            None,
+            42,
+            &[],
+            true,
+        );
 
         assert!(
             has_flag_pair(&args, "-e", "MY_VAR=my_value"),
@@ -188,7 +318,16 @@ mod build_docker_run_args {
             String::from("INHERITED_VAR"),
             EnvironmentVariableEntry::Inherit,
         );
-        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42, &[]);
+        let args = build_docker_run_args(
+            &config,
+            1000,
+            1000,
+            "/home/user/project",
+            None,
+            42,
+            &[],
+            true,
+        );
 
         assert!(
             has_flag_pair(&args, "-e", "INHERITED_VAR"),
@@ -199,7 +338,16 @@ mod build_docker_run_args {
     #[test]
     fn image_name_is_last_when_no_container_args() {
         let config = make_config();
-        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42, &[]);
+        let args = build_docker_run_args(
+            &config,
+            1000,
+            1000,
+            "/home/user/project",
+            None,
+            42,
+            &[],
+            true,
+        );
 
         let expected_image = config.get_image_name();
         assert_eq!(
@@ -225,6 +373,7 @@ mod build_docker_run_args {
             None,
             42,
             &container_args,
+            true,
         );
 
         let expected_image = config.get_image_name();

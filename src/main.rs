@@ -12,6 +12,7 @@ use build::BuildOutcome;
 use clap::Parser as _;
 use config::{CliArgs, Command};
 use std::env;
+use std::io::{IsTerminal as _, stdin};
 use utils::clock::SystemClock;
 use utils::docker::RealDockerBackend;
 use utils::fs::RealFilesystem;
@@ -50,6 +51,7 @@ fn main() -> Result<()> {
             let gid = unsafe { libc::getgid() };
 
             let random_suffix = utils::random::random_name_suffix();
+            let stdin_is_terminal = stdin().is_terminal();
 
             match run::run(
                 &config,
@@ -60,6 +62,7 @@ fn main() -> Result<()> {
                 &current_dir,
                 random_suffix,
                 container_args,
+                stdin_is_terminal,
             ) {
                 Ok(infallible) => match infallible {},
                 Err(error) => return Err(error.into()),

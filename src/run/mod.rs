@@ -23,6 +23,11 @@ pub(crate) enum RunError {
 ///
 /// This is a pure function that produces the full argument vector, making it easy to test without
 /// actually running Docker.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each parameter represents a distinct, independently varying input to the command \
+        assembly; bundling them would obscure the pure-function contract."
+)]
 fn build_docker_run_args(
     config: &Config,
     uid: u32,
@@ -31,11 +36,20 @@ fn build_docker_run_args(
     main_worktree: Option<&Path>,
     random_suffix: u32,
     container_args: &[String],
+    stdin_is_terminal: bool,
 ) -> Vec<String> {
     let mut args: Vec<String> = Vec::new();
 
     // Subcommand and fixed flags.
-    args.extend(["run", "-t", "-i", "--init", "--rm"].map(String::from));
+    args.extend(["run", "--init", "--rm"].map(String::from));
+
+    // Only allocate a pseudo-TTY and keep stdin open when the host's
+    // stdin is actually a TTY. Without this guard, piped or scripted
+    // invocations cause Docker to hang or emit spurious warnings.
+    if stdin_is_terminal {
+        args.push(String::from("-t"));
+        args.push(String::from("-i"));
+    }
 
     // User mapping.
     args.push(String::from("--user"));
@@ -129,6 +143,7 @@ pub(crate) fn run(
     current_dir: &str,
     random_suffix: u32,
     container_args: &[String],
+    stdin_is_terminal: bool,
 ) -> Result<Infallible, RunError> {
     let main_worktree = git_context
         .main_worktree_root(Path::new(current_dir))
@@ -142,6 +157,7 @@ pub(crate) fn run(
         main_worktree.as_deref(),
         random_suffix,
         container_args,
+        stdin_is_terminal,
     );
 
     docker_backend

@@ -237,5 +237,8 @@ The container is started with:
   accessible.
 - **Configured mountpoints and environment variables**: as defined in the
   configuration.
+- **TTY mode**: `-t` (allocate pseudo-TTY) and `-i` (keep stdin open) are only
+  added when standard input is a TTY. This means piped or scripted invocations
+  won't cause Docker to hang or emit spurious warnings.
 - **`--init` and `--rm`**: the container uses an init process and is
   automatically removed on exit.
