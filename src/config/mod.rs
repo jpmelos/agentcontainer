@@ -275,23 +275,24 @@ impl Config {
 #[derive(Parser, Debug)]
 #[command(about, version)]
 pub(crate) struct CliArgs {
-    /// Path to the Dockerfile.
+    /// Path to the Dockerfile. Defaults to `.agentcontainer/Dockerfile`.
     #[arg(long)]
     dockerfile: Option<String>,
 
-    /// Directory used as the Docker build context.
+    /// Directory used as the Docker build context. Defaults to the current working directory.
     #[arg(long)]
     build_context: Option<String>,
 
-    /// Name used in Docker image tag.
+    /// Name used in Docker image tag. Defaults to the current working directory's name.
     #[arg(long)]
     project_name: Option<String>,
 
-    /// Username for image tag and `USERNAME` build argument.
+    /// Username for image tag and `USERNAME` build argument. Defaults to the current user's
+    /// username.
     #[arg(long)]
     username: Option<String>,
 
-    /// Docker build `--target`. Also appended to image name.
+    /// Docker build `--target`. Also appended to image name. If not provided, no target is used.
     #[arg(long)]
     target: Option<String>,
 
