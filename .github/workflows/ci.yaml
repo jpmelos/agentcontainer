@@ -21,8 +21,33 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Cache Rust toolchains
+        uses: actions/cache@v5
+        with:
+          path: ~/.rustup
+          key: ${{ runner.os }}-rust-toolchains-${{ hashFiles('rust-toolchain.toml') }}
+          restore-keys: ${{ runner.os }}-rust-toolchains-
+
+      - name: Cache Python dependencies
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.pythonLocation }}
+          key: ${{ runner.os }}-python-${{ env.PYTHON_VERSION }}-pip-pre-commit-${{ env.PRECOMMIT_VERSION }}
+          restore-keys: ${{ runner.os }}-python-${{ env.PYTHON_VERSION }}-pip-
+
+      - name: Cache Cargo registry and build
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
       - name: Set up Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache: false
 
       - name: Install pre-commit
         run: |
