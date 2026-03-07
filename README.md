@@ -68,8 +68,8 @@ embedded tildes are left untouched.
 [mountpoints]
 "/workspace" = "~/projects/myproject"
 "/data" = "/mnt/shared-data"
-"~/.ssh" = true                                 # mount at the same path inside the container
-"/unwanted" = false                             # suppress a mountpoint defined in a lower-priority source
+"~/.ssh" = true                       # mount at the same path inside the container
+"/unwanted" = false                   # suppress a mountpoint defined in a lower-priority source
 ```
 
 On the CLI, use `--mountpoint` (repeatable):
@@ -191,7 +191,7 @@ username = "alice"
 
 [mountpoints]
 "/workspace" = "~/projects/myproject"
-"~/.ssh" = true  # same path on host and in container
+"~/.ssh" = true                       # same path on host and in container
 
 [environment_variables]
 EDITOR = "nvim"
@@ -209,6 +209,7 @@ AGENTCONTAINER_DOCKERFILE=".agentcontainer/Dockerfile"
 AGENTCONTAINER_BUILD_CONTEXT="."
 AGENTCONTAINER_MOUNTPOINTS='{"/workspace" = "~/projects/myproject", "~/.ssh" = true}'
 AGENTCONTAINER_ENVIRONMENT_VARIABLES='{EDITOR = "nvim", SSH_AUTH_SOCK = true}'
+AGENTCONTAINER_ALLOW_STALE=true # or `false`
 ```
 
 ## Commands
