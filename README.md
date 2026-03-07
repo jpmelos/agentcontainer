@@ -41,6 +41,13 @@ lowest to highest priority:
 
 `force_rebuild` and `no_rebuild` are mutually exclusive.
 
+`target` and `pre_run` can be unset by a higher-priority source by setting them
+to an empty string. This suppresses a value inherited from a lower-priority
+source. For example, if a global config sets `target = "builder"`, a project
+config can override it with `target = ""` to build without a target. The same
+works via environment variables (`AGENTCONTAINER_TARGET=""`) and CLI
+(`--target ""`).
+
 ### Mountpoints
 
 The `mountpoints` table maps container paths to host paths. In TOML, each key
@@ -200,11 +207,8 @@ TOML. For example:
 ```sh
 AGENTCONTAINER_DOCKERFILE=".agentcontainer/Dockerfile"
 AGENTCONTAINER_BUILD_CONTEXT="."
-AGENTCONTAINER_PROJECT_NAME="myproject"
-AGENTCONTAINER_USERNAME="alice"
 AGENTCONTAINER_MOUNTPOINTS='{"/workspace" = "~/projects/myproject", "~/.ssh" = true}'
 AGENTCONTAINER_ENVIRONMENT_VARIABLES='{EDITOR = "nvim", SSH_AUTH_SOCK = true}'
-AGENTCONTAINER_PRE_RUN="./hooks/pre-run.sh"
 ```
 
 ## Commands

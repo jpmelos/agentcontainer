@@ -1,3 +1,4 @@
+mod empty_string_removal;
 mod environment_variables;
 mod get_container_name;
 mod get_image_name;

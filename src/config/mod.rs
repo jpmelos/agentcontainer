@@ -636,6 +636,7 @@ fn validate_config(config: &Config) -> Result<(), ConfigError> {
     }
 
     if let Some(ref target) = config.target
+        && !target.is_empty()
         && slugify(target).is_empty()
     {
         return Err(ConfigError::InvalidTarget {
@@ -665,6 +666,9 @@ fn validate_config(config: &Config) -> Result<(), ConfigError> {
 /// Entries marked `Remove` instruct higher-priority layers to suppress a key inherited from a
 /// lower-priority layer. Once merging is complete they carry no further information and are
 /// removed so that callers see only the final, actionable set of entries.
+///
+/// For `target` and `pre_run`, an empty string acts as a removal sentinel: a higher-priority
+/// layer can set either to `""` to suppress a value inherited from a lower-priority layer.
 fn clean_config(config: &mut Config) {
     config
         .mountpoints
@@ -672,6 +676,13 @@ fn clean_config(config: &mut Config) {
     config
         .environment_variables
         .retain(|_, entry| !matches!(entry, EnvironmentVariableEntry::Remove));
+
+    if config.target.as_deref() == Some("") {
+        config.target = None;
+    }
+    if config.pre_run.as_deref() == Some("") {
+        config.pre_run = None;
+    }
 }
 
 #[cfg(test)]
