@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-trap 'echo "Exit status $? at line $LINENO from: $BASH_COMMAND"' ERR
+trap 'echo "Exit status $? at line $LINENO from: $BASH_COMMAND" >&2' ERR
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 # The default hook found in https://github.com/pre-commit/pre-commit-hooks on
