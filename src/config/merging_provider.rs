@@ -6,6 +6,10 @@
 //!
 //! This is essential for `environment_variables`, where the inner fields of two entries for the
 //! same variable name across sources must not be merged together.
+//!
+//! Before merging, each provider's mountpoint keys and values undergo tilde expansion so that
+//! `~/.ssh` and `/home/alice/.ssh` from different sources are recognized as the same key during
+//! priority resolution.
 
 use figment::{
     Error, Metadata, Profile, Provider,
@@ -14,14 +18,21 @@ use figment::{
 
 /// A figment provider that merges multiple providers in priority order using controlled-depth
 /// merging.
+///
+/// Mountpoint paths are tilde-expanded per-provider before merging so that priority resolution
+/// operates on canonical absolute paths.
 pub(crate) struct MergingProvider {
     providers: Vec<Box<dyn Provider>>,
+    home_dir: String,
 }
 
 impl MergingProvider {
     /// Create a new `MergingProvider` from a list of providers in priority order (lowest first).
-    pub(crate) fn new(providers: Vec<Box<dyn Provider>>) -> Self {
-        Self { providers }
+    pub(crate) fn new(providers: Vec<Box<dyn Provider>>, home_dir: String) -> Self {
+        Self {
+            providers,
+            home_dir,
+        }
     }
 }
 
@@ -35,12 +46,51 @@ impl Provider for MergingProvider {
         for provider in &self.providers {
             // Propagate errors from any individual provider.
             let provider_data = provider.data()?;
-            for (_profile, dict) in provider_data {
+            for (_profile, mut dict) in provider_data {
+                expand_tildes_in_mountpoints(&mut dict, &self.home_dir);
                 merge_dicts(&mut merged, &dict);
             }
         }
         Ok(Profile::Default.collect(merged))
     }
+}
+
+/// Replace a leading `~` in a path with the given home directory.
+///
+/// Only `~` alone or `~/…` is expanded; `~user/…` and embedded tildes are left untouched.
+/// A trailing slash on `home_dir` is stripped to avoid producing double slashes.
+fn expand_tilde(path: &str, home_dir: &str) -> String {
+    let home_dir = home_dir.trim_end_matches('/');
+    if path == "~" {
+        String::from(home_dir)
+    } else if let Some(rest) = path.strip_prefix("~/") {
+        format!("{home_dir}/{rest}")
+    } else {
+        String::from(path)
+    }
+}
+
+/// Expand leading `~` to `home_dir` in all mountpoint keys and host-path values.
+///
+/// Operates on the raw figment `Dict` so that expansion happens before merging. This ensures
+/// that `~/.ssh` and `/home/alice/.ssh` from different config sources are treated as the same
+/// mountpoint during priority resolution.
+fn expand_tildes_in_mountpoints(dict: &mut Dict, home_dir: &str) {
+    let Some(Value::Dict(tag, mountpoints)) = dict.remove("mountpoints") else {
+        return;
+    };
+    let expanded: Dict = mountpoints
+        .into_iter()
+        .map(|(key, value)| {
+            let expanded_key = expand_tilde(&key, home_dir);
+            let expanded_value = match value {
+                Value::String(t, s) => Value::String(t, expand_tilde(&s, home_dir)),
+                other => other,
+            };
+            (expanded_key, expanded_value)
+        })
+        .collect();
+    dict.insert(String::from("mountpoints"), Value::Dict(tag, expanded));
 }
 
 /// Merge `incoming` into `base` using controlled-depth semantics.

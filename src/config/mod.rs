@@ -521,7 +521,8 @@ pub(crate) fn get_config<'cli_args>(
     );
 
     // Extract the configuration using our custom merging provider.
-    let mut config: Config = Figment::from(MergingProvider::new(providers)).extract()?;
+    let mut config: Config =
+        Figment::from(MergingProvider::new(providers, String::from(home_dir))).extract()?;
 
     validate_config(&config)?;
     clean_config(&mut config);

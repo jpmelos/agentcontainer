@@ -1,0 +1,317 @@
+use super::{CliArgs, Command, MountpointEntry, default_cli_args, get_config, write_file};
+use std::env;
+use tempfile::tempdir;
+
+#[test]
+fn tilde_in_toml_host_path_is_expanded_to_home_dir() {
+    let home_dir = tempdir().expect("Failed to create temporary directory");
+    let cwd = tempdir().expect("Failed to create temporary directory");
+    write_file(
+        &cwd.path().join(".agentcontainer/config.toml"),
+        r#"
+        [mountpoints]
+        "/container" = "~/host-data"
+        "#,
+    );
+    env::set_current_dir(cwd.path()).expect("Failed to set current directory");
+    let cli_args = default_cli_args(Command::Config);
+
+    let home_dir_str = home_dir
+        .path()
+        .to_str()
+        .expect("Temporary directory path is not valid UTF-8");
+    let (_, config) = get_config(home_dir_str, &cli_args).expect("`get_config` failed");
+
+    assert!(matches!(
+        config.mountpoints.get("/container"),
+        Some(MountpointEntry::Active(host)) if host == &format!("{home_dir_str}/host-data")
+    ));
+}
+
+#[test]
+fn tilde_in_toml_container_path_key_is_expanded_to_home_dir() {
+    let home_dir = tempdir().expect("Failed to create temporary directory");
+    let cwd = tempdir().expect("Failed to create temporary directory");
+    write_file(
+        &cwd.path().join(".agentcontainer/config.toml"),
+        r#"
+        [mountpoints]
+        "~/.ssh" = "/host/.ssh"
+        "#,
+    );
+    env::set_current_dir(cwd.path()).expect("Failed to set current directory");
+    let cli_args = default_cli_args(Command::Config);
+
+    let home_dir_str = home_dir
+        .path()
+        .to_str()
+        .expect("Temporary directory path is not valid UTF-8");
+    let (_, config) = get_config(home_dir_str, &cli_args).expect("`get_config` failed");
+
+    let expected_container_path = format!("{home_dir_str}/.ssh");
+    assert!(matches!(
+        config.mountpoints.get(expected_container_path.as_str()),
+        Some(MountpointEntry::Active(host)) if host == "/host/.ssh"
+    ));
+}
+
+#[test]
+fn tilde_in_toml_same_path_key_is_expanded_to_home_dir() {
+    let home_dir = tempdir().expect("Failed to create temporary directory");
+    let cwd = tempdir().expect("Failed to create temporary directory");
+    write_file(
+        &cwd.path().join(".agentcontainer/config.toml"),
+        r#"
+        [mountpoints]
+        "~/.ssh" = true
+        "#,
+    );
+    env::set_current_dir(cwd.path()).expect("Failed to set current directory");
+    let cli_args = default_cli_args(Command::Config);
+
+    let home_dir_str = home_dir
+        .path()
+        .to_str()
+        .expect("Temporary directory path is not valid UTF-8");
+    let (_, config) = get_config(home_dir_str, &cli_args).expect("`get_config` failed");
+
+    let expected_path = format!("{home_dir_str}/.ssh");
+    assert!(
+        matches!(
+            config.mountpoints.get(expected_path.as_str()),
+            Some(MountpointEntry::SamePath)
+        ),
+        "Expected `SamePath` at {expected_path:?}, got: {:?}",
+        config.mountpoints
+    );
+}
+
+#[test]
+fn bare_tilde_in_host_path_is_expanded_to_home_dir() {
+    let home_dir = tempdir().expect("Failed to create temporary directory");
+    let cwd = tempdir().expect("Failed to create temporary directory");
+    write_file(
+        &cwd.path().join(".agentcontainer/config.toml"),
+        r#"
+        [mountpoints]
+        "/home" = "~"
+        "#,
+    );
+    env::set_current_dir(cwd.path()).expect("Failed to set current directory");
+    let cli_args = default_cli_args(Command::Config);
+
+    let home_dir_str = home_dir
+        .path()
+        .to_str()
+        .expect("Temporary directory path is not valid UTF-8");
+    let (_, config) = get_config(home_dir_str, &cli_args).expect("`get_config` failed");
+
+    assert!(matches!(
+        config.mountpoints.get("/home"),
+        Some(MountpointEntry::Active(host)) if host == home_dir_str
+    ));
+}
+
+#[test]
+fn tilde_in_cli_host_path_is_expanded_to_home_dir() {
+    let home_dir = tempdir().expect("Failed to create temporary directory");
+    let cli_args = CliArgs::new(
+        Command::Config,
+        None,
+        None,
+        None,
+        None,
+        None,
+        false,
+        false,
+        false,
+        false,
+        vec![String::from("~/projects:/container")],
+        vec![],
+        None,
+    );
+
+    let home_dir_str = home_dir
+        .path()
+        .to_str()
+        .expect("Temporary directory path is not valid UTF-8");
+    let (_, config) = get_config(home_dir_str, &cli_args).expect("`get_config` failed");
+
+    assert!(matches!(
+        config.mountpoints.get("/container"),
+        Some(MountpointEntry::Active(host)) if host == &format!("{home_dir_str}/projects")
+    ));
+}
+
+#[test]
+fn tilde_in_both_paths_is_expanded_to_home_dir() {
+    let home_dir = tempdir().expect("Failed to create temporary directory");
+    let cwd = tempdir().expect("Failed to create temporary directory");
+    write_file(
+        &cwd.path().join(".agentcontainer/config.toml"),
+        r#"
+        [mountpoints]
+        "~/.config" = "~/.config"
+        "#,
+    );
+    env::set_current_dir(cwd.path()).expect("Failed to set current directory");
+    let cli_args = default_cli_args(Command::Config);
+
+    let home_dir_str = home_dir
+        .path()
+        .to_str()
+        .expect("Temporary directory path is not valid UTF-8");
+    let (_, config) = get_config(home_dir_str, &cli_args).expect("`get_config` failed");
+
+    let expected_path = format!("{home_dir_str}/.config");
+    assert!(matches!(
+        config.mountpoints.get(expected_path.as_str()),
+        Some(MountpointEntry::Active(host)) if host == &expected_path
+    ));
+}
+
+#[test]
+fn embedded_tilde_is_not_expanded() {
+    let home_dir = tempdir().expect("Failed to create temporary directory");
+    let cwd = tempdir().expect("Failed to create temporary directory");
+    write_file(
+        &cwd.path().join(".agentcontainer/config.toml"),
+        r#"
+        [mountpoints]
+        "/container" = "/host/~data"
+        "#,
+    );
+    env::set_current_dir(cwd.path()).expect("Failed to set current directory");
+    let cli_args = default_cli_args(Command::Config);
+
+    let (_, config) = get_config(
+        home_dir
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8"),
+        &cli_args,
+    )
+    .expect("`get_config` failed");
+
+    assert!(matches!(
+        config.mountpoints.get("/container"),
+        Some(MountpointEntry::Active(host)) if host == "/host/~data"
+    ));
+}
+
+#[test]
+fn higher_priority_literal_path_overrides_lower_priority_tilde_path() {
+    let home_dir = tempdir().expect("Failed to create temporary directory");
+    let cwd = tempdir().expect("Failed to create temporary directory");
+
+    let home_dir_str = home_dir
+        .path()
+        .to_str()
+        .expect("Temporary directory path is not valid UTF-8");
+
+    // Lower-priority source uses `~/.ssh`.
+    write_file(
+        &cwd.path().join(".agentcontainer/config.toml"),
+        r#"
+        [mountpoints]
+        "~/.ssh" = "/low-priority-host"
+        "#,
+    );
+    // Higher-priority source uses the literal expanded path.
+    write_file(
+        &cwd.path().join(".agentcontainer/config.local.toml"),
+        &format!(
+            r#"
+            [mountpoints]
+            "{home_dir_str}/.ssh" = "/high-priority-host"
+            "#
+        ),
+    );
+    env::set_current_dir(cwd.path()).expect("Failed to set current directory");
+    let cli_args = default_cli_args(Command::Config);
+
+    let (_, config) = get_config(home_dir_str, &cli_args).expect("`get_config` failed");
+
+    let expected_key = format!("{home_dir_str}/.ssh");
+    assert!(
+        matches!(
+            config.mountpoints.get(expected_key.as_str()),
+            Some(MountpointEntry::Active(host)) if host == "/high-priority-host"
+        ),
+        "Expected higher-priority literal path to win, got: {:?}",
+        config.mountpoints
+    );
+}
+
+#[test]
+fn higher_priority_tilde_path_overrides_lower_priority_literal_path() {
+    let home_dir = tempdir().expect("Failed to create temporary directory");
+    let cwd = tempdir().expect("Failed to create temporary directory");
+
+    let home_dir_str = home_dir
+        .path()
+        .to_str()
+        .expect("Temporary directory path is not valid UTF-8");
+
+    // Lower-priority source uses the literal expanded path.
+    write_file(
+        &cwd.path().join(".agentcontainer/config.toml"),
+        &format!(
+            r#"
+            [mountpoints]
+            "{home_dir_str}/.ssh" = "/low-priority-host"
+            "#
+        ),
+    );
+    // Higher-priority source uses `~/.ssh`.
+    write_file(
+        &cwd.path().join(".agentcontainer/config.local.toml"),
+        r#"
+        [mountpoints]
+        "~/.ssh" = "/high-priority-host"
+        "#,
+    );
+    env::set_current_dir(cwd.path()).expect("Failed to set current directory");
+    let cli_args = default_cli_args(Command::Config);
+
+    let (_, config) = get_config(home_dir_str, &cli_args).expect("`get_config` failed");
+
+    let expected_key = format!("{home_dir_str}/.ssh");
+    assert!(
+        matches!(
+            config.mountpoints.get(expected_key.as_str()),
+            Some(MountpointEntry::Active(host)) if host == "/high-priority-host"
+        ),
+        "Expected higher-priority tilde path to win, got: {:?}",
+        config.mountpoints
+    );
+}
+
+#[test]
+fn tilde_user_syntax_is_not_expanded() {
+    let home_dir = tempdir().expect("Failed to create temporary directory");
+    let cwd = tempdir().expect("Failed to create temporary directory");
+    write_file(
+        &cwd.path().join(".agentcontainer/config.toml"),
+        r#"
+        [mountpoints]
+        "/container" = "~alice/data"
+        "#,
+    );
+    env::set_current_dir(cwd.path()).expect("Failed to set current directory");
+    let cli_args = default_cli_args(Command::Config);
+
+    let (_, config) = get_config(
+        home_dir
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8"),
+        &cli_args,
+    )
+    .expect("`get_config` failed");
+
+    assert!(matches!(
+        config.mountpoints.get("/container"),
+        Some(MountpointEntry::Active(host)) if host == "~alice/data"
+    ));
+}

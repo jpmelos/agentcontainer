@@ -2,6 +2,7 @@ mod environment_variables;
 mod get_container_name;
 mod get_image_name;
 mod mountpoints;
+mod tilde_expansion;
 
 use super::{
     CliArgs, Command, Config, ConfigError, EnvironmentVariableEntry, MountpointEntry, get_config,

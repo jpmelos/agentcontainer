@@ -51,11 +51,17 @@ is a container path and the value is either:
   used as both host and container path).
 - `false`: remove a mountpoint inherited from a lower-priority config source.
 
+A leading `~` in container-path keys and host-path values is expanded to the
+user's home directory before config sources are merged. This means `~/.ssh` and
+`/home/alice/.ssh` from different sources are treated as the same mountpoint
+during priority resolution. Only `~` alone or `~/…` is expanded; `~user/…` and
+embedded tildes are left untouched.
+
 ```toml
 [mountpoints]
-"/workspace" = "/home/alice/projects/myproject"
+"/workspace" = "~/projects/myproject"
 "/data" = "/mnt/shared-data"
-"/home/alice/.ssh" = true                       # mount at the same path inside the container
+"~/.ssh" = true                                 # mount at the same path inside the container
 "/unwanted" = false                             # suppress a mountpoint defined in a lower-priority source
 ```
 
@@ -63,7 +69,7 @@ On the CLI, use `--mountpoint` (repeatable):
 
 ```sh
 # Mount a host path into the container.
-agentcontainer build --mountpoint /home/alice/projects/myproject:/workspace
+agentcontainer build --mountpoint '~/projects/myproject:/workspace'
 
 # Mount at the same path inside the container (same-path shorthand).
 agentcontainer build --mountpoint /home/alice/.ssh
@@ -177,8 +183,8 @@ project_name = "myproject"
 username = "alice"
 
 [mountpoints]
-"/workspace" = "/home/alice/projects/myproject"
-"/home/alice/.ssh" = true  # same path on host and in container
+"/workspace" = "~/projects/myproject"
+"~/.ssh" = true  # same path on host and in container
 
 [environment_variables]
 EDITOR = "nvim"
@@ -196,7 +202,7 @@ AGENTCONTAINER_DOCKERFILE=".agentcontainer/Dockerfile"
 AGENTCONTAINER_BUILD_CONTEXT="."
 AGENTCONTAINER_PROJECT_NAME="myproject"
 AGENTCONTAINER_USERNAME="alice"
-AGENTCONTAINER_MOUNTPOINTS='{"/workspace" = "/home/alice/projects/myproject", "/home/alice/.ssh" = true}'
+AGENTCONTAINER_MOUNTPOINTS='{"/workspace" = "~/projects/myproject", "~/.ssh" = true}'
 AGENTCONTAINER_ENVIRONMENT_VARIABLES='{EDITOR = "nvim", SSH_AUTH_SOCK = true}'
 AGENTCONTAINER_PRE_RUN="./hooks/pre-run.sh"
 ```
