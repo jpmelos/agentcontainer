@@ -54,7 +54,7 @@ fn main() -> Result<()> {
                 }
             }
         }
-        Command::Run => {
+        Command::Run { ref container_args } => {
             let current_dir = env::current_dir()
                 .context("Failed to get current working directory")?
                 .to_str()
@@ -76,6 +76,7 @@ fn main() -> Result<()> {
                 gid,
                 &current_dir,
                 random_suffix,
+                container_args,
             ) {
                 Ok(infallible) => match infallible {},
                 Err(error) => return Err(error.into()),

@@ -203,7 +203,22 @@ Run the agent container. This replaces the current process with `docker run`
 via `exec`.
 
 ```
+agentcontainer run [-- <container-args>...]
+```
+
+Arguments after `--` are passed through to the container's entrypoint.
+Everything before `--` is parsed by `agentcontainer` itself and will error on
+unrecognized flags.
+
+```sh
+# Run interactively with no extra arguments.
 agentcontainer run
+
+# Pass arguments to the container entrypoint.
+agentcontainer run -- --print --output-format json
+
+# Global flags still go before the subcommand.
+agentcontainer --project-name foo run -- --help
 ```
 
 The container is started with:

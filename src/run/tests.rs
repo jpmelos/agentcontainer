@@ -47,7 +47,7 @@ mod build_docker_run_args {
     #[test]
     fn includes_fixed_flags() {
         let config = make_config();
-        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42);
+        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42, &[]);
 
         assert_eq!(args[0], "run");
         assert_eq!(args[1], "-t");
@@ -59,7 +59,7 @@ mod build_docker_run_args {
     #[test]
     fn includes_user_mapping() {
         let config = make_config();
-        let args = build_docker_run_args(&config, 1000, 1001, "/home/user/project", None, 42);
+        let args = build_docker_run_args(&config, 1000, 1001, "/home/user/project", None, 42, &[]);
 
         assert!(
             has_flag_pair(&args, "--user", "1000:1001"),
@@ -74,7 +74,7 @@ mod build_docker_run_args {
     #[test]
     fn includes_container_name() {
         let config = make_config();
-        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42);
+        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42, &[]);
 
         assert!(
             has_flag_pair(&args, "--name", "agentcontainer_myproject_42"),
@@ -85,7 +85,7 @@ mod build_docker_run_args {
     #[test]
     fn includes_working_directory() {
         let config = make_config();
-        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42);
+        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42, &[]);
 
         assert!(
             has_flag_pair(&args, "-w", "/home/user/project"),
@@ -96,7 +96,7 @@ mod build_docker_run_args {
     #[test]
     fn includes_current_dir_mount() {
         let config = make_config();
-        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42);
+        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42, &[]);
 
         assert!(
             has_flag_pair(&args, "-v", "/home/user/project:/home/user/project"),
@@ -115,6 +115,7 @@ mod build_docker_run_args {
             "/home/user/project",
             Some(&worktree),
             42,
+            &[],
         );
 
         assert!(
@@ -126,7 +127,7 @@ mod build_docker_run_args {
     #[test]
     fn no_worktree_mount_when_absent() {
         let config = make_config();
-        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42);
+        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42, &[]);
 
         // Only one -v flag (for the current dir).
         let volume_count = args.iter().filter(|arg| *arg == "-v").count();
@@ -143,7 +144,7 @@ mod build_docker_run_args {
             String::from("/container/path"),
             MountpointEntry::Active(String::from("/host/path")),
         );
-        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42);
+        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42, &[]);
 
         assert!(
             has_flag_pair(&args, "-v", "/host/path:/container/path"),
@@ -157,7 +158,7 @@ mod build_docker_run_args {
         config
             .mountpoints
             .insert(String::from("/shared/data"), MountpointEntry::SamePath);
-        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42);
+        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42, &[]);
 
         assert!(
             has_flag_pair(&args, "-v", "/shared/data:/shared/data"),
@@ -172,7 +173,7 @@ mod build_docker_run_args {
             String::from("MY_VAR"),
             EnvironmentVariableEntry::Value(String::from("my_value")),
         );
-        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42);
+        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42, &[]);
 
         assert!(
             has_flag_pair(&args, "-e", "MY_VAR=my_value"),
@@ -187,7 +188,7 @@ mod build_docker_run_args {
             String::from("INHERITED_VAR"),
             EnvironmentVariableEntry::Inherit,
         );
-        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42);
+        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42, &[]);
 
         assert!(
             has_flag_pair(&args, "-e", "INHERITED_VAR"),
@@ -196,15 +197,47 @@ mod build_docker_run_args {
     }
 
     #[test]
-    fn image_name_is_last_argument() {
+    fn image_name_is_last_when_no_container_args() {
         let config = make_config();
-        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42);
+        let args = build_docker_run_args(&config, 1000, 1000, "/home/user/project", None, 42, &[]);
 
         let expected_image = config.get_image_name();
         assert_eq!(
             args.last().expect("Args should not be empty"),
             &expected_image,
-            "Image name should be the last argument"
+            "Image name should be the last argument when there are no container args"
+        );
+    }
+
+    #[test]
+    fn container_args_appear_after_image_name() {
+        let config = make_config();
+        let container_args = vec![
+            String::from("--print"),
+            String::from("--output-format"),
+            String::from("json"),
+        ];
+        let args = build_docker_run_args(
+            &config,
+            1000,
+            1000,
+            "/home/user/project",
+            None,
+            42,
+            &container_args,
+        );
+
+        let expected_image = config.get_image_name();
+        let image_position = args
+            .iter()
+            .position(|arg| arg == &expected_image)
+            .expect("Image name not found in args");
+
+        let trailing_args = &args[image_position + 1..];
+        assert_eq!(
+            trailing_args,
+            &["--print", "--output-format", "json"],
+            "Container args should appear after the image name"
         );
     }
 }

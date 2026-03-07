@@ -30,6 +30,7 @@ fn build_docker_run_args(
     current_dir: &str,
     main_worktree: Option<&Path>,
     random_suffix: u32,
+    container_args: &[String],
 ) -> Vec<String> {
     let mut args: Vec<String> = Vec::new();
 
@@ -100,8 +101,11 @@ fn build_docker_run_args(
         }
     }
 
-    // Image name (must be last).
+    // Image name (must come after all Docker flags, before container arguments).
     args.push(config.get_image_name());
+
+    // Passthrough arguments for the container entrypoint.
+    args.extend_from_slice(container_args);
 
     args
 }
@@ -110,6 +114,12 @@ fn build_docker_run_args(
 ///
 /// Assembles a `docker run` command and replaces the current process via `exec`. On success, the
 /// current process is replaced and this function never returns. On failure, returns a `RunError`.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each parameter represents a distinct concern (config, backends, process identity, \
+        filesystem context, container arguments); grouping them into a struct would add \
+        indirection without improving clarity."
+)]
 pub(crate) fn run(
     config: &Config,
     docker_backend: &impl DockerBackend,
@@ -118,6 +128,7 @@ pub(crate) fn run(
     gid: u32,
     current_dir: &str,
     random_suffix: u32,
+    container_args: &[String],
 ) -> Result<Infallible, RunError> {
     let main_worktree = git_context
         .main_worktree_root(Path::new(current_dir))
@@ -130,6 +141,7 @@ pub(crate) fn run(
         current_dir,
         main_worktree.as_deref(),
         random_suffix,
+        container_args,
     );
 
     docker_backend

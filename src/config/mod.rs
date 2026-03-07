@@ -331,7 +331,11 @@ pub(crate) enum Command {
     /// Build the agent container image.
     Build,
     /// Run the agent container.
-    Run,
+    Run {
+        /// Arguments to pass through to the container entrypoint. Must come after `--`.
+        #[arg(last = true)]
+        container_args: Vec<String>,
+    },
 }
 
 /// Errors that can be returned from `get_config`.
