@@ -1,5 +1,8 @@
-use super::{BuildError, BuildOutcome, DockerBuildError, build};
-use crate::config::Config;
+use super::{
+    BuildError, BuildOutcome, DockerBuildError, assemble_docker_build_args, build,
+    build_docker_build_hookable_args,
+};
+use crate::config::{BuildArgumentEntry, Config};
 use crate::utils::clock::Clock;
 use crate::utils::docker::DockerBackend;
 use crate::utils::fs::Filesystem;
@@ -9,10 +12,6 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::io::Error as IoError;
-
-// ---------------------------------------------------------------------------
-// Helpers: minimal Config constructor.
-// ---------------------------------------------------------------------------
 
 /// Construct a `Config` for use in tests, without going through CLI parsing or `figment`.
 fn make_config() -> Config {
@@ -38,10 +37,6 @@ fn make_config() -> Config {
 fn default_image_name() -> String {
     make_config().get_image_name()
 }
-
-// ---------------------------------------------------------------------------
-// Helpers: fixed timestamps for deterministic time-based logic.
-// ---------------------------------------------------------------------------
 
 /// A UTC timestamp that represents "today" at noon.
 fn today_noon_utc() -> DateTime<Utc> {
@@ -75,10 +70,6 @@ fn long_ago_utc() -> DateTime<Utc> {
     Utc.from_utc_datetime(&NaiveDateTime::new(date, noon))
 }
 
-// ---------------------------------------------------------------------------
-// Mocks.
-// ---------------------------------------------------------------------------
-
 /// Produce a `DockerBuildError::NonZeroExit` with a dummy exit status obtained by running a
 /// process that exits with a non-zero code.
 fn make_non_zero_exit_error() -> DockerBuildError {
@@ -96,8 +87,8 @@ struct MockDocker {
     existing_image_last_tagged: Result<Option<DateTime<Utc>>, anyhow::Error>,
     /// Value returned by `run_docker_build`.
     build_result: Result<(), DockerBuildError>,
-    /// Captures the `pre_build_extra_args` passed to `run_docker_build`.
-    received_pre_build_args: RefCell<Vec<String>>,
+    /// Captures the full args passed to `run_docker_build`.
+    received_build_args: RefCell<Vec<String>>,
 }
 
 impl MockDocker {
@@ -106,7 +97,7 @@ impl MockDocker {
         Self {
             existing_image_last_tagged: Ok(None),
             build_result: Ok(()),
-            received_pre_build_args: RefCell::new(Vec::new()),
+            received_build_args: RefCell::new(Vec::new()),
         }
     }
 
@@ -115,7 +106,7 @@ impl MockDocker {
         Self {
             existing_image_last_tagged: Ok(None),
             build_result: Err(make_non_zero_exit_error()),
-            received_pre_build_args: RefCell::new(Vec::new()),
+            received_build_args: RefCell::new(Vec::new()),
         }
     }
 
@@ -124,7 +115,7 @@ impl MockDocker {
         Self {
             existing_image_last_tagged: Ok(Some(last_tagged)),
             build_result: Ok(()),
-            received_pre_build_args: RefCell::new(Vec::new()),
+            received_build_args: RefCell::new(Vec::new()),
         }
     }
 
@@ -133,7 +124,7 @@ impl MockDocker {
         Self {
             existing_image_last_tagged: Ok(Some(last_tagged)),
             build_result: Err(make_non_zero_exit_error()),
-            received_pre_build_args: RefCell::new(Vec::new()),
+            received_build_args: RefCell::new(Vec::new()),
         }
     }
 
@@ -142,7 +133,7 @@ impl MockDocker {
         Self {
             existing_image_last_tagged: Err(anyhow!("docker inspect failed")),
             build_result: Ok(()),
-            received_pre_build_args: RefCell::new(Vec::new()),
+            received_build_args: RefCell::new(Vec::new()),
         }
     }
 }
@@ -158,13 +149,8 @@ impl DockerBackend for MockDocker {
         }
     }
 
-    fn run_docker_build(
-        &self,
-        _config: &Config,
-        _image_name: &str,
-        pre_build_extra_args: &[String],
-    ) -> Result<(), DockerBuildError> {
-        *self.received_pre_build_args.borrow_mut() = pre_build_extra_args.to_vec();
+    fn run_docker_build(&self, args: &[String]) -> Result<(), DockerBuildError> {
+        *self.received_build_args.borrow_mut() = args.to_vec();
         match self.build_result.as_ref() {
             Ok(&()) => Ok(()),
             Err(&DockerBuildError::NonZeroExit(status)) => {
@@ -228,9 +214,161 @@ impl Clock for MockClock {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Tests for `build()`.
-// ---------------------------------------------------------------------------
+/// Check if `args` contains a consecutive `[flag, value]` pair.
+///
+/// Uses `.windows(2)` which guarantees each window has exactly 2 elements, making the indexing
+/// safe.
+#[expect(
+    clippy::missing_asserts_for_indexing,
+    reason = "`.windows(2)` guarantees each window has exactly 2 elements."
+)]
+fn has_flag_pair(args: &[String], flag: &str, value: &str) -> bool {
+    args.windows(2)
+        .any(|pair| pair[0] == flag && pair[1] == value)
+}
+
+mod build_docker_build_hookable_args {
+    use super::*;
+
+    #[test]
+    fn empty_when_no_build_arguments() {
+        let config = make_config();
+        let args = build_docker_build_hookable_args(&config);
+        assert!(args.is_empty(), "Expected empty hookable args: {args:?}");
+    }
+
+    #[test]
+    fn includes_build_arg_with_value() {
+        let mut config = make_config();
+        config.build_arguments.insert(
+            String::from("MY_ARG"),
+            BuildArgumentEntry::Value(String::from("my_value")),
+        );
+        let args = build_docker_build_hookable_args(&config);
+        assert!(
+            has_flag_pair(&args, "--build-arg", "MY_ARG=my_value"),
+            "Expected `--build-arg MY_ARG=my_value` in hookable args: {args:?}"
+        );
+    }
+
+    #[test]
+    fn includes_build_arg_inherit() {
+        let mut config = make_config();
+        config
+            .build_arguments
+            .insert(String::from("INHERITED"), BuildArgumentEntry::Inherit);
+        let args = build_docker_build_hookable_args(&config);
+        assert!(
+            has_flag_pair(&args, "--build-arg", "INHERITED"),
+            "Expected `--build-arg INHERITED` in hookable args: {args:?}"
+        );
+    }
+}
+
+mod assemble_docker_build_args {
+    use super::*;
+
+    #[test]
+    fn starts_with_build_subcommand() {
+        let config = make_config();
+        let image_name = config.get_image_name();
+        let args = assemble_docker_build_args(&config, &image_name, &[]);
+        assert_eq!(args[0], "build", "First arg should be `build`: {args:?}");
+    }
+
+    #[test]
+    fn includes_file_flag() {
+        let config = make_config();
+        let image_name = config.get_image_name();
+        let args = assemble_docker_build_args(&config, &image_name, &[]);
+        assert!(
+            has_flag_pair(&args, "--file", &config.dockerfile),
+            "Expected `--file` (long form) in args: {args:?}"
+        );
+    }
+
+    #[test]
+    fn includes_tag_flag() {
+        let config = make_config();
+        let image_name = config.get_image_name();
+        let args = assemble_docker_build_args(&config, &image_name, &[]);
+        assert!(
+            has_flag_pair(&args, "--tag", &image_name),
+            "Expected `--tag` (long form) in args: {args:?}"
+        );
+    }
+
+    #[test]
+    fn includes_target_when_set() {
+        let config = Config {
+            target: Some(String::from("builder")),
+            ..make_config()
+        };
+        let image_name = config.get_image_name();
+        let args = assemble_docker_build_args(&config, &image_name, &[]);
+        assert!(
+            has_flag_pair(&args, "--target", "builder"),
+            "Expected `--target builder` in args: {args:?}"
+        );
+    }
+
+    #[test]
+    fn includes_no_cache_when_set() {
+        let config = Config {
+            no_build_cache: true,
+            ..make_config()
+        };
+        let image_name = config.get_image_name();
+        let args = assemble_docker_build_args(&config, &image_name, &[]);
+        assert!(
+            args.contains(&String::from("--no-cache")),
+            "Expected `--no-cache` in assembled args: {args:?}"
+        );
+    }
+
+    #[test]
+    fn omits_no_cache_when_not_set() {
+        let config = make_config();
+        let image_name = config.get_image_name();
+        let args = assemble_docker_build_args(&config, &image_name, &[]);
+        assert!(
+            !args.contains(&String::from("--no-cache")),
+            "`--no-cache` should not be present when not set: {args:?}"
+        );
+    }
+
+    #[test]
+    fn build_context_is_last() {
+        let config = make_config();
+        let image_name = config.get_image_name();
+        let args = assemble_docker_build_args(&config, &image_name, &[]);
+        assert_eq!(
+            args.last().expect("Args should not be empty"),
+            &config.build_context,
+            "Build context should be the last argument: {args:?}"
+        );
+    }
+
+    #[test]
+    fn hookable_args_appear_before_build_context() {
+        let config = make_config();
+        let image_name = config.get_image_name();
+        let hookable = vec![String::from("--label"), String::from("foo=bar")];
+        let args = assemble_docker_build_args(&config, &image_name, &hookable);
+
+        let context_position = args.len() - 1;
+        assert_eq!(
+            args[context_position - 2],
+            "--label",
+            "Hookable args should appear before build context: {args:?}"
+        );
+        assert_eq!(
+            args[context_position - 1],
+            "foo=bar",
+            "Hookable args should appear before build context: {args:?}"
+        );
+    }
+}
 
 mod build {
     use super::*;
@@ -413,37 +551,31 @@ mod build {
     }
 
     #[test]
-    fn pre_build_extra_args_are_forwarded_to_docker_build() {
+    fn hookable_args_are_forwarded_to_docker_build() {
         let config = make_config();
         let docker = MockDocker::no_image_build_succeeds();
         let filesystem = MockFilesystem::with_mtime(long_ago_utc());
         let clock = MockClock::real_now();
-        let extra_args = vec![String::from("--label"), String::from("foo=bar")];
+        let hookable_args = vec![String::from("--label"), String::from("foo=bar")];
 
-        let outcome = build(&config, &docker, &filesystem, &clock, &extra_args)
+        let outcome = build(&config, &docker, &filesystem, &clock, &hookable_args)
             .expect("`build` should succeed");
 
         assert!(
             matches!(outcome, BuildOutcome::Built),
             "Expected `Built`, got: {outcome:?}"
         );
-        assert_eq!(
-            *docker.received_pre_build_args.borrow(),
-            extra_args,
-            "Expected pre-build extra args to be forwarded to `run_docker_build`"
+
+        // Verify the full assembled args contain the hookable args.
+        let received_args = docker.received_build_args.borrow();
+        assert!(
+            has_flag_pair(&received_args, "--label", "foo=bar"),
+            "Expected hookable args in assembled build command: {received_args:?}"
         );
     }
 }
 
-mod should_rebuild_fn {
-    // ---------------------------------------------------------------------------
-    // Tests for `should_rebuild()` via `build()`.
-    //
-    // `should_rebuild` is private, so we drive it through `build()` with
-    // `force_rebuild = false`, `no_rebuild = false`, and a docker mock that
-    // always succeeds. The outcome (`UpToDate` vs. `Built`) reveals what
-    // `should_rebuild` returned.
-    // ---------------------------------------------------------------------------
+mod should_rebuild {
     use super::*;
 
     #[test]

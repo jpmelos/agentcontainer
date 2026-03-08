@@ -117,10 +117,12 @@ underscore, followed by ASCII letters, digits, or underscores.
 ### Pre-build hooks
 
 The `pre_build` option specifies a list of paths to executables that run before
-`docker build`. Each hook's stdout is parsed as a TOML array of strings, and
-these strings are injected as extra arguments to the `docker build` command
-(after all built-in flags, but before the build context). Arguments from
-multiple hooks are concatenated in the order the hooks are listed.
+`docker build`. Hooks form a pipeline: the first hook receives the hookable
+arguments computed from the configuration (i.e. `--build-arg` entries), and
+each subsequent hook receives the output of the previous one. The final result
+is injected into the `docker build` command after all built-in flags but before
+the build context. Built-in flags managed by agentcontainer (`--file`,
+`--target`, `--tag`, `--no-cache`, build context) are not exposed to hooks.
 
 Lists from multiple config sources are concatenated (lower-priority first). For
 example, a hook defined in `config.toml` runs before one added via
@@ -134,22 +136,36 @@ command is invoked, even if the build is ultimately skipped (e.g. because the
 image is already up to date or `--no-rebuild` is set). Keep this in mind if a
 hook is expensive or has side effects.
 
-Each hook must:
+Each hook:
 
-- Exit with status 0.
-- Print a valid TOML array of strings to stdout (e.g.
-  `["--label", "foo=bar"]`).
-- Produce valid UTF-8 output.
+- Receives the path to a temporary file as its first argument (`$1`). The file
+  contains the current arguments as a TOML document with an `args` key (e.g.
+  `args = ["--build-arg", "FOO=bar"]`).
+- Must print a TOML document with the same shape to stdout (e.g.
+  `args = ["--build-arg", "FOO=bar", "--label", "version=1"]`).
+- Must exit with status 0.
+- Must produce valid UTF-8 output.
 
-Example hook script:
+Example hook script (requires `toml` from `toml-cli` and `jq`):
 
 ```sh
 #!/bin/sh
-cat <<EOF
-[
-    "--build-arg", "BUILD_DATE=$(date "+%Y-%m-%d")"
-]
-EOF
+set -euo pipefail
+
+input_file="$1"
+
+# Read the current args from the input file.
+existing=$(toml get "$input_file" args)
+
+# Build extra entries.
+extra=$(jq -n \
+	--arg a1 "--build-arg" --arg v1 "BUILD_DATE=$(date "+%Y-%m-%d")" \
+	'[$a1, $v1]')
+
+# Merge and output.
+merged=$(jq -cn --argjson existing "$existing" --argjson extra "$extra" \
+	'$existing + $extra')
+echo "args = ${merged}"
 ```
 
 A leading `~` in each path is expanded to the user's home directory. Only `~`
@@ -254,10 +270,14 @@ underscore, followed by ASCII letters, digits, or underscores.
 ### Pre-run hooks
 
 The `pre_run` option specifies a list of paths to executables that run before
-`docker run`. Each hook's stdout is parsed as a TOML array of strings, and
-these strings are injected as extra arguments to the `docker run` command
-(after all built-in flags, but before the image name). Arguments from multiple
-hooks are concatenated in the order the hooks are listed.
+`docker run`. Hooks form a pipeline: the first hook receives the hookable
+arguments computed from the configuration (i.e. `--volume` and `--env`
+entries), and each subsequent hook receives the output of the previous one. The
+final result is injected into the `docker run` command after all built-in flags
+but before the image name. Built-in flags managed by agentcontainer (`--init`,
+`--rm`, `--tty`, `--interactive`, `--user`, `--group-add`, `--name`,
+`--workdir`, the current-directory volume, the worktree volume, the image name,
+and container arguments) are not exposed to hooks.
 
 Lists from multiple config sources are concatenated (lower-priority first). For
 example, a hook defined in `config.toml` runs before one added via
@@ -266,17 +286,36 @@ example, a hook defined in `config.toml` runs before one added via
 This provides a way to dynamically compute Docker flags at runtime based on the
 host environment.
 
-Each hook must:
+Each hook:
 
-- Exit with status 0.
-- Print a valid TOML array of strings to stdout (e.g. `["--network", "host"]`).
-- Produce valid UTF-8 output.
+- Receives the path to a temporary file as its first argument (`$1`). The file
+  contains the current arguments as a TOML document with an `args` key (e.g.
+  `args = ["--volume", "/host:/container"]`).
+- Must print a TOML document with the same shape to stdout (e.g.
+  `args = ["--volume", "/host:/container", "--network", "host"]`).
+- Must exit with status 0.
+- Must produce valid UTF-8 output.
 
-Example hook script:
+Example hook script (requires `toml` from `toml-cli` and `jq`):
 
 ```sh
 #!/bin/sh
-echo '["--network", "host"]'
+set -euo pipefail
+
+input_file="$1"
+
+# Read the current args from the input file.
+existing=$(toml get "$input_file" args)
+
+# Build extra entries.
+extra=$(jq -n \
+	--arg a1 "--network" --arg v1 "host" \
+	'[$a1, $v1]')
+
+# Merge and output.
+merged=$(jq -cn --argjson existing "$existing" --argjson extra "$extra" \
+	'$existing + $extra')
+echo "args = ${merged}"
 ```
 
 A leading `~` in each path is expanded to the user's home directory, just like
@@ -415,6 +454,6 @@ The container is started with:
   the main worktree root is also mounted so that Git objects are accessible.
 - **Configured volumes and environment variables**: as defined in the
   configuration.
-- **TTY mode**: `-t` (allocate pseudo-TTY) and `-i` (keep stdin open) are only
-  added when standard input is a TTY. This means piped or scripted invocations
-  won't cause Docker to hang or emit spurious warnings.
+- **TTY mode**: `--tty` (allocate pseudo-TTY) and `--interactive` (keep stdin
+  open) are only added when standard input is a TTY. This means piped or
+  scripted invocations won't cause Docker to hang or emit spurious warnings.

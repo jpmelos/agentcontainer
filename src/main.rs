@@ -57,7 +57,8 @@ fn main() -> Result<()> {
             let random_suffix = utils::random::random_name_suffix();
             let stdin_is_terminal = stdin().is_terminal();
 
-            let pre_run_extra_args = hooks::execute_pre_run_hooks(&config.pre_run)?;
+            let hookable_args = run::build_docker_run_hookable_args(&config);
+            let hookable_args = hooks::execute_pre_run_hooks(&config.pre_run, hookable_args)?;
 
             info!("Running agent container");
 
@@ -71,7 +72,7 @@ fn main() -> Result<()> {
                 random_suffix,
                 container_args,
                 stdin_is_terminal,
-                &pre_run_extra_args,
+                &hookable_args,
             ) {
                 Ok(infallible) => match infallible {},
                 Err(error) => return Err(error.into()),
@@ -84,7 +85,8 @@ fn main() -> Result<()> {
 
 /// Build the image and report the outcome to stderr.
 fn handle_build(config: &config::Config) -> Result<()> {
-    let pre_build_extra_args = hooks::execute_pre_build_hooks(&config.pre_build)?;
+    let hookable_args = build::build_docker_build_hookable_args(config);
+    let hookable_args = hooks::execute_pre_build_hooks(&config.pre_build, hookable_args)?;
 
     info!("Building agent container");
 
@@ -93,7 +95,7 @@ fn handle_build(config: &config::Config) -> Result<()> {
         &RealDockerBackend,
         &RealFilesystem,
         &SystemClock,
-        &pre_build_extra_args,
+        &hookable_args,
     ) {
         Ok(BuildOutcome::SkippedNoRebuild) => {
             info!("Skipping rebuild (--no-rebuild)");
@@ -121,5 +123,4 @@ mod tests {
     // be referenced somewhere in the crate under test.
     use assert_cmd as _;
     use predicates as _;
-    use tempfile as _;
 }

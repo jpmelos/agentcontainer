@@ -1,6 +1,5 @@
 //! Abstraction over Docker CLI operations.
 
-use crate::config::{BuildArgumentEntry, Config};
 use anyhow::Context as _;
 use chrono::{DateTime, Utc};
 use std::convert::Infallible;
@@ -33,14 +32,8 @@ pub(crate) trait DockerBackend {
         image_name: &str,
     ) -> Result<Option<DateTime<Utc>>, anyhow::Error>;
 
-    /// Run `docker build` with the given configuration, image name, and extra arguments from the
-    /// pre-build hook.
-    fn run_docker_build(
-        &self,
-        config: &Config,
-        image_name: &str,
-        pre_build_extra_args: &[String],
-    ) -> Result<(), DockerBuildError>;
+    /// Run `docker build` with the given fully-assembled argument list.
+    fn run_docker_build(&self, args: &[String]) -> Result<(), DockerBuildError>;
 
     /// Replace the current process with `docker run` using the given arguments.
     ///
@@ -90,61 +83,21 @@ impl DockerBackend for RealDockerBackend {
         Ok(Some(image_last_tagged))
     }
 
-    fn run_docker_build(
-        &self,
-        config: &Config,
-        image_name: &str,
-        pre_build_extra_args: &[String],
-    ) -> Result<(), DockerBuildError> {
-        let mut args: Vec<String> = vec!["build".into()];
-
-        args.extend(["-f".into(), config.dockerfile.clone()]);
-
-        for (key, entry) in &config.build_arguments {
-            match *entry {
-                BuildArgumentEntry::Value(ref value) => {
-                    args.extend(["--build-arg".into(), format!("{key}={value}")]);
-                }
-                BuildArgumentEntry::Inherit => {
-                    args.extend(["--build-arg".into(), key.clone()]);
-                }
-                BuildArgumentEntry::Remove => {
-                    unreachable!(
-                        "`Remove` entries are stripped by `clean_config` before `build` is called."
-                    )
-                }
-            }
-        }
-
-        if let Some(ref target) = config.target {
-            args.extend(["--target".into(), target.clone()]);
-        }
-
-        if config.no_build_cache {
-            args.push("--no-cache".into());
-        }
-
-        args.extend(["-t".into(), image_name.to_owned()]);
-
-        // Extra arguments from the pre-build hook.
-        args.extend(pre_build_extra_args.iter().cloned());
-
-        args.push(config.build_context.clone());
-
+    fn run_docker_build(&self, args: &[String]) -> Result<(), DockerBuildError> {
         debug!(?args, "Running `docker build`");
 
         let status = Command::new("docker")
-            .args(&args)
+            .args(args)
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .status()
             .map_err(DockerBuildError::SpawnFailed)?;
 
         if status.success() {
-            debug!(%image_name, "Image built successfully");
+            debug!("Image built successfully");
             Ok(())
         } else {
-            debug!(%image_name, %status, "`docker build` failed");
+            debug!(%status, "`docker build` failed");
             Err(DockerBuildError::NonZeroExit(status))
         }
     }

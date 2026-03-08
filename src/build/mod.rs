@@ -1,6 +1,6 @@
 //! Build the agent container Docker image.
 
-use crate::config::Config;
+use crate::config::{BuildArgumentEntry, Config};
 use crate::utils::clock::Clock;
 use crate::utils::docker::{DockerBackend, DockerBuildError};
 use crate::utils::fs::Filesystem;
@@ -58,13 +58,72 @@ pub(crate) enum BuildError {
     },
 }
 
+/// Compute the hookable arguments for `docker build`.
+///
+/// These are the arguments that hooks are allowed to see and modify. They include only
+/// `--build-arg` entries. Base arguments managed by agentcontainer (`build`, `--file`, `--target`,
+/// `--tag`, `--no-cache`, build context) are not included.
+pub(crate) fn build_docker_build_hookable_args(config: &Config) -> Vec<String> {
+    let mut args: Vec<String> = Vec::new();
+
+    for (key, entry) in &config.build_arguments {
+        match *entry {
+            BuildArgumentEntry::Value(ref value) => {
+                args.extend(["--build-arg".into(), format!("{key}={value}")]);
+            }
+            BuildArgumentEntry::Inherit => {
+                args.extend(["--build-arg".into(), key.clone()]);
+            }
+            BuildArgumentEntry::Remove => {
+                unreachable!(
+                    "`Remove` entries are stripped by `clean_config` before `build` is called."
+                )
+            }
+        }
+    }
+
+    args
+}
+
+/// Assemble the full `docker build` argument list from base arguments and hookable arguments.
+///
+/// The base arguments (managed by agentcontainer) are placed first, followed by the hookable
+/// arguments (possibly modified by hooks), followed by the build context (which must be last).
+fn assemble_docker_build_args(
+    config: &Config,
+    image_name: &str,
+    hookable_args: &[String],
+) -> Vec<String> {
+    let mut args: Vec<String> = vec!["build".into()];
+
+    args.extend(["--file".into(), config.dockerfile.clone()]);
+
+    if let Some(ref target) = config.target {
+        args.extend(["--target".into(), target.clone()]);
+    }
+
+    if config.no_build_cache {
+        args.push("--no-cache".into());
+    }
+
+    args.extend(["--tag".into(), image_name.to_owned()]);
+
+    // Hookable arguments (possibly modified by hooks).
+    args.extend_from_slice(hookable_args);
+
+    // Build context must be the last argument.
+    args.push(config.build_context.clone());
+
+    args
+}
+
 /// Build the agent container image according to the configuration.
 pub(crate) fn build(
     config: &Config,
     docker: &impl DockerBackend,
     filesystem: &impl Filesystem,
     clock: &impl Clock,
-    pre_build_extra_args: &[String],
+    hookable_args: &[String],
 ) -> Result<BuildOutcome, BuildError> {
     let image_name = config.get_image_name();
     debug!(%image_name, "Checking if image needs to be rebuilt");
@@ -100,23 +159,28 @@ pub(crate) fn build(
     }
 
     debug!(%image_name, "Building image");
-    match docker.run_docker_build(config, &image_name, pre_build_extra_args) {
+    let args = assemble_docker_build_args(config, &image_name, hookable_args);
+    match docker.run_docker_build(&args) {
         Ok(()) => {
-            debug!("Image built");
+            debug!(%image_name, "Image built");
             Ok(BuildOutcome::Built)
         }
         Err(build_error) => {
             if config.allow_stale && image_exists {
-                debug!(%build_error, "Image failed to build; using stale");
+                debug!(%image_name, %build_error, "Image failed to build; using stale");
                 Ok(BuildOutcome::UsingStaleAfterFailure { build_error })
             } else if image_exists {
-                debug!(%build_error, "Image failed to build; stale exists but not requested");
+                debug!(
+                    %image_name,
+                    %build_error,
+                    "Image failed to build; stale exists but not requested",
+                );
                 Err(BuildError::BuildFailedStaleExists {
                     image_name,
                     build_error,
                 })
             } else {
-                debug!(%build_error, "Image failed to build; no existing image");
+                debug!(%image_name, %build_error, "Image failed to build; no existing image");
                 Err(BuildError::BuildFailedNoFallback {
                     image_name,
                     build_error,

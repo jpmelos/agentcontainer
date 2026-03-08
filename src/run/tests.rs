@@ -1,11 +1,7 @@
-use super::build_docker_run_args;
+use super::{build_docker_run_args, build_docker_run_hookable_args};
 use crate::config::{Config, EnvironmentVariableEntry, VolumeEntry};
 use std::collections::HashMap;
 use std::path::PathBuf;
-
-// ---------------------------------------------------------------------------
-// Helpers.
-// ---------------------------------------------------------------------------
 
 /// Construct a `Config` for use in tests, without going through CLI parsing or `figment`.
 fn make_config() -> Config {
@@ -42,7 +38,7 @@ fn has_flag_pair(args: &[String], flag: &str, value: &str) -> bool {
 
 /// Builder for calling `build_docker_run_args` with sensible defaults.
 ///
-/// Most tests only vary 1–2 arguments. The builder lets tests specify only the arguments that
+/// Most tests only vary 1-2 arguments. The builder lets tests specify only the arguments that
 /// matter for each scenario while keeping the rest at their default values.
 struct RunArgsBuilder<'config> {
     config: &'config Config,
@@ -50,7 +46,7 @@ struct RunArgsBuilder<'config> {
     main_worktree: Option<PathBuf>,
     container_args: Vec<String>,
     stdin_is_terminal: bool,
-    pre_run_extra_args: Vec<String>,
+    hookable_args: Vec<String>,
 }
 
 impl<'config> RunArgsBuilder<'config> {
@@ -63,7 +59,7 @@ impl<'config> RunArgsBuilder<'config> {
             main_worktree: None,
             container_args: vec![],
             stdin_is_terminal: true,
-            pre_run_extra_args: vec![],
+            hookable_args: vec![],
         }
     }
 
@@ -87,8 +83,8 @@ impl<'config> RunArgsBuilder<'config> {
         self
     }
 
-    fn pre_run_extra_args(mut self, args: &[&str]) -> Self {
-        self.pre_run_extra_args = args.iter().map(|s| String::from(*s)).collect();
+    fn hookable_args(mut self, args: &[&str]) -> Self {
+        self.hookable_args = args.iter().map(|s| String::from(*s)).collect();
         self
     }
 
@@ -103,14 +99,77 @@ impl<'config> RunArgsBuilder<'config> {
             42,
             &self.container_args,
             self.stdin_is_terminal,
-            &self.pre_run_extra_args,
+            &self.hookable_args,
         )
     }
 }
 
-// ---------------------------------------------------------------------------
-// Tests for `build_docker_run_args()`.
-// ---------------------------------------------------------------------------
+mod build_docker_run_hookable_args {
+    use super::*;
+
+    #[test]
+    fn empty_when_no_volumes_and_no_env_vars() {
+        let config = make_config();
+        let args = build_docker_run_hookable_args(&config);
+        assert!(args.is_empty(), "Expected empty hookable args: {args:?}");
+    }
+
+    #[test]
+    fn includes_config_volume() {
+        let mut config = make_config();
+        config.volumes.insert(
+            String::from("/container/path"),
+            VolumeEntry::Active(String::from("/host/path")),
+        );
+        let args = build_docker_run_hookable_args(&config);
+        assert!(
+            has_flag_pair(&args, "--volume", "/host/path:/container/path"),
+            "Config volume not found in hookable args: {args:?}"
+        );
+    }
+
+    #[test]
+    fn includes_same_path_volume() {
+        let mut config = make_config();
+        config.volumes.insert(
+            String::from("/shared/data"),
+            VolumeEntry::Active(String::from("/shared/data")),
+        );
+        let args = build_docker_run_hookable_args(&config);
+        assert!(
+            has_flag_pair(&args, "--volume", "/shared/data:/shared/data"),
+            "Same-path volume not found in hookable args: {args:?}"
+        );
+    }
+
+    #[test]
+    fn includes_env_var_with_value() {
+        let mut config = make_config();
+        config.environment_variables.insert(
+            String::from("MY_VAR"),
+            EnvironmentVariableEntry::Value(String::from("my_value")),
+        );
+        let args = build_docker_run_hookable_args(&config);
+        assert!(
+            has_flag_pair(&args, "--env", "MY_VAR=my_value"),
+            "Environment variable with value not found in hookable args: {args:?}"
+        );
+    }
+
+    #[test]
+    fn includes_env_var_inherit() {
+        let mut config = make_config();
+        config.environment_variables.insert(
+            String::from("INHERITED_VAR"),
+            EnvironmentVariableEntry::Inherit,
+        );
+        let args = build_docker_run_hookable_args(&config);
+        assert!(
+            has_flag_pair(&args, "--env", "INHERITED_VAR"),
+            "Inherited environment variable not found in hookable args: {args:?}"
+        );
+    }
+}
 
 mod build_docker_run_args {
     use super::*;
@@ -133,12 +192,21 @@ mod build_docker_run_args {
         let args = RunArgsBuilder::new(&config).build();
 
         assert!(
-            args.contains(&String::from("-t")),
-            "`-t` should be present when stdin is a TTY: {args:?}"
+            args.contains(&String::from("--tty")),
+            "`--tty` should be present when stdin is a TTY: {args:?}"
         );
         assert!(
-            args.contains(&String::from("-i")),
-            "`-i` should be present when stdin is a TTY: {args:?}"
+            args.contains(&String::from("--interactive")),
+            "`--interactive` should be present when stdin is a TTY: {args:?}"
+        );
+        // Should not contain short forms.
+        assert!(
+            !args.contains(&String::from("-t")),
+            "Should not contain short form `-t`: {args:?}"
+        );
+        assert!(
+            !args.contains(&String::from("-i")),
+            "Should not contain short form `-i`: {args:?}"
         );
     }
 
@@ -148,12 +216,12 @@ mod build_docker_run_args {
         let args = RunArgsBuilder::new(&config).stdin_is_not_terminal().build();
 
         assert!(
-            !args.contains(&String::from("-t")),
-            "`-t` should not be present when stdin is not a TTY: {args:?}"
+            !args.contains(&String::from("--tty")),
+            "`--tty` should not be present when stdin is not a TTY: {args:?}"
         );
         assert!(
-            !args.contains(&String::from("-i")),
-            "`-i` should not be present when stdin is not a TTY: {args:?}"
+            !args.contains(&String::from("--interactive")),
+            "`--interactive` should not be present when stdin is not a TTY: {args:?}"
         );
     }
 
@@ -189,8 +257,12 @@ mod build_docker_run_args {
         let args = RunArgsBuilder::new(&config).build();
 
         assert!(
-            has_flag_pair(&args, "-w", "/home/user/project"),
-            "`-w /home/user/project` not found in args: {args:?}"
+            has_flag_pair(&args, "--workdir", "/home/user/project"),
+            "`--workdir /home/user/project` not found in args: {args:?}"
+        );
+        assert!(
+            !args.contains(&String::from("-w")),
+            "Should not contain short form `-w`: {args:?}"
         );
     }
 
@@ -200,7 +272,7 @@ mod build_docker_run_args {
         let args = RunArgsBuilder::new(&config).build();
 
         assert!(
-            has_flag_pair(&args, "-v", "/home/user/project:/home/user/project"),
+            has_flag_pair(&args, "--volume", "/home/user/project:/home/user/project"),
             "Current directory volume not found in args: {args:?}"
         );
     }
@@ -213,7 +285,11 @@ mod build_docker_run_args {
             .build();
 
         assert!(
-            has_flag_pair(&args, "-v", "/home/user/main-repo:/home/user/main-repo"),
+            has_flag_pair(
+                &args,
+                "--volume",
+                "/home/user/main-repo:/home/user/main-repo"
+            ),
             "Worktree volume not found in args: {args:?}"
         );
     }
@@ -223,71 +299,33 @@ mod build_docker_run_args {
         let config = make_config();
         let args = RunArgsBuilder::new(&config).build();
 
-        // Only one -v flag (for the current dir).
-        let volume_count = args.iter().filter(|arg| *arg == "-v").count();
+        // Only one --volume flag (for the current dir).
+        let volume_count = args.iter().filter(|arg| *arg == "--volume").count();
         assert_eq!(
             volume_count, 1,
-            "Expected exactly one `-v` flag, got {volume_count}"
+            "Expected exactly one `--volume` flag, got {volume_count}"
         );
     }
 
     #[test]
-    fn includes_config_volumes() {
-        let mut config = make_config();
-        config.volumes.insert(
-            String::from("/container/path"),
-            VolumeEntry::Active(String::from("/host/path")),
-        );
-        let args = RunArgsBuilder::new(&config).build();
+    fn hookable_args_include_volumes_and_env_vars_in_assembled_command() {
+        let config = make_config();
+        let args = RunArgsBuilder::new(&config)
+            .hookable_args(&[
+                "--volume",
+                "/host/path:/container/path",
+                "--env",
+                "MY_VAR=my_value",
+            ])
+            .build();
 
         assert!(
-            has_flag_pair(&args, "-v", "/host/path:/container/path"),
-            "Config volume not found in args: {args:?}"
+            has_flag_pair(&args, "--volume", "/host/path:/container/path"),
+            "Config volume from hookable args not found: {args:?}"
         );
-    }
-
-    #[test]
-    fn includes_same_path_volume() {
-        let mut config = make_config();
-        config.volumes.insert(
-            String::from("/shared/data"),
-            VolumeEntry::Active(String::from("/shared/data")),
-        );
-        let args = RunArgsBuilder::new(&config).build();
-
         assert!(
-            has_flag_pair(&args, "-v", "/shared/data:/shared/data"),
-            "Same-path volume not found in args: {args:?}"
-        );
-    }
-
-    #[test]
-    fn includes_env_var_with_value() {
-        let mut config = make_config();
-        config.environment_variables.insert(
-            String::from("MY_VAR"),
-            EnvironmentVariableEntry::Value(String::from("my_value")),
-        );
-        let args = RunArgsBuilder::new(&config).build();
-
-        assert!(
-            has_flag_pair(&args, "-e", "MY_VAR=my_value"),
-            "Environment variable with value not found in args: {args:?}"
-        );
-    }
-
-    #[test]
-    fn includes_env_var_inherit() {
-        let mut config = make_config();
-        config.environment_variables.insert(
-            String::from("INHERITED_VAR"),
-            EnvironmentVariableEntry::Inherit,
-        );
-        let args = RunArgsBuilder::new(&config).build();
-
-        assert!(
-            has_flag_pair(&args, "-e", "INHERITED_VAR"),
-            "Inherited environment variable not found in args: {args:?}"
+            has_flag_pair(&args, "--env", "MY_VAR=my_value"),
+            "Environment variable from hookable args not found: {args:?}"
         );
     }
 
@@ -305,10 +343,10 @@ mod build_docker_run_args {
     }
 
     #[test]
-    fn pre_run_extra_args_appear_before_image_name() {
+    fn hookable_args_appear_before_image_name() {
         let config = make_config();
         let args = RunArgsBuilder::new(&config)
-            .pre_run_extra_args(&["--volume", "/host/path:/container/path"])
+            .hookable_args(&["--network", "host"])
             .build();
 
         let expected_image = config.get_image_name();
@@ -317,43 +355,43 @@ mod build_docker_run_args {
             .position(|arg| arg == &expected_image)
             .expect("Image name not found in args");
 
-        // The two extra args should appear right before the image name.
-        assert_eq!(
-            args[image_position - 2],
-            "--volume",
-            "Pre-run extra args should appear before the image name: {args:?}"
-        );
-        assert_eq!(
-            args[image_position - 1],
-            "/host/path:/container/path",
-            "Pre-run extra args should appear before the image name: {args:?}"
-        );
-    }
-
-    #[test]
-    fn pre_run_extra_args_and_container_args_coexist() {
-        let config = make_config();
-        let args = RunArgsBuilder::new(&config)
-            .container_args(&["bash"])
-            .pre_run_extra_args(&["--network", "host"])
-            .build();
-
-        let expected_image = config.get_image_name();
-        let image_position = args
-            .iter()
-            .position(|arg| arg == &expected_image)
-            .expect("Image name not found in args");
-
-        // Pre-run args before image.
+        // The two hookable args should appear right before the image name.
         assert_eq!(
             args[image_position - 2],
             "--network",
-            "Pre-run extra args should appear before the image name: {args:?}"
+            "Hookable args should appear before the image name: {args:?}"
         );
         assert_eq!(
             args[image_position - 1],
             "host",
-            "Pre-run extra args should appear before the image name: {args:?}"
+            "Hookable args should appear before the image name: {args:?}"
+        );
+    }
+
+    #[test]
+    fn hookable_args_and_container_args_coexist() {
+        let config = make_config();
+        let args = RunArgsBuilder::new(&config)
+            .container_args(&["bash"])
+            .hookable_args(&["--network", "host"])
+            .build();
+
+        let expected_image = config.get_image_name();
+        let image_position = args
+            .iter()
+            .position(|arg| arg == &expected_image)
+            .expect("Image name not found in args");
+
+        // Hookable args before image.
+        assert_eq!(
+            args[image_position - 2],
+            "--network",
+            "Hookable args should appear before the image name: {args:?}"
+        );
+        assert_eq!(
+            args[image_position - 1],
+            "host",
+            "Hookable args should appear before the image name: {args:?}"
         );
 
         // Container args after image.
