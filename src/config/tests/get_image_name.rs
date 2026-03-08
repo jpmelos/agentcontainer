@@ -3,6 +3,8 @@ use super::*;
 #[test]
 fn image_name_without_target() {
     let home_dir = tempdir().expect("Failed to create temporary directory");
+    let cwd = tempdir().expect("Failed to create temporary directory");
+    env::set_current_dir(cwd.path()).expect("Failed to set current directory");
     let cli_args = CliArgsBuilder::new(Command::Config)
         .project_name("myproject")
         .username("alice")
@@ -26,6 +28,8 @@ fn image_name_without_target() {
 #[test]
 fn image_name_with_target() {
     let home_dir = tempdir().expect("Failed to create temporary directory");
+    let cwd = tempdir().expect("Failed to create temporary directory");
+    env::set_current_dir(cwd.path()).expect("Failed to set current directory");
     let cli_args = CliArgsBuilder::new(Command::Config)
         .project_name("myproject")
         .username("alice")
@@ -50,6 +54,8 @@ fn image_name_with_target() {
 #[test]
 fn image_name_slugifies_project_name() {
     let home_dir = tempdir().expect("Failed to create temporary directory");
+    let cwd = tempdir().expect("Failed to create temporary directory");
+    env::set_current_dir(cwd.path()).expect("Failed to set current directory");
     let cli_args = CliArgsBuilder::new(Command::Config)
         .project_name("My Project")
         .username("alice")
@@ -73,6 +79,8 @@ fn image_name_slugifies_project_name() {
 #[test]
 fn image_name_slugifies_username() {
     let home_dir = tempdir().expect("Failed to create temporary directory");
+    let cwd = tempdir().expect("Failed to create temporary directory");
+    env::set_current_dir(cwd.path()).expect("Failed to set current directory");
     let cli_args = CliArgsBuilder::new(Command::Config)
         .project_name("myproject")
         .username("Alice Smith")
@@ -96,6 +104,8 @@ fn image_name_slugifies_username() {
 #[test]
 fn image_name_slugifies_target() {
     let home_dir = tempdir().expect("Failed to create temporary directory");
+    let cwd = tempdir().expect("Failed to create temporary directory");
+    env::set_current_dir(cwd.path()).expect("Failed to set current directory");
     let cli_args = CliArgsBuilder::new(Command::Config)
         .project_name("myproject")
         .username("alice")

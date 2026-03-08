@@ -8,6 +8,8 @@ use tempfile::tempdir;
 #[test]
 fn default_environment_variables_is_empty() {
     let home_dir = tempdir().expect("Failed to create temporary directory");
+    let cwd = tempdir().expect("Failed to create temporary directory");
+    env::set_current_dir(cwd.path()).expect("Failed to set current directory");
     let cli_args = default_cli_args(Command::Config);
 
     let (_, config) = get_config(
@@ -144,6 +146,8 @@ mod parsing_env_var {
     #[test]
     fn env_var_inherit_format_is_parsed_correctly() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         // SAFETY: `set_var` is safe here because `cargo nextest` runs each test in its own process,
         // so there are no other threads to race with.
         unsafe {
@@ -173,6 +177,8 @@ mod parsing_env_var {
     #[test]
     fn malformed_cli_env_var_empty_string_triggers_invalid_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgsBuilder::new(Command::Config)
             .environment_variables(&[""])
             .build();
@@ -195,6 +201,8 @@ mod parsing_env_var {
     #[test]
     fn cli_env_var_removal_with_equals_in_key_triggers_invalid_key_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgsBuilder::new(Command::Config)
             .environment_variables(&["!KEY=extra"])
             .build();
@@ -221,6 +229,8 @@ mod parsing_cli_args {
     #[test]
     fn cli_env_var_key_equals_value_format_parses_correctly() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgsBuilder::new(Command::Config)
             .environment_variables(&["KEY=val"])
             .build();
@@ -244,6 +254,8 @@ mod parsing_cli_args {
     fn cli_env_var_key_equals_value_with_equals_in_value_parses_correctly() {
         // Split is on the first `=` only; anything after is part of the value.
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgsBuilder::new(Command::Config)
             .environment_variables(&["KEY=value=another"])
             .build();
@@ -266,6 +278,8 @@ mod parsing_cli_args {
     #[test]
     fn cli_env_var_key_only_format_means_inherit() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgsBuilder::new(Command::Config)
             .environment_variables(&["KEY"])
             .build();
@@ -355,6 +369,8 @@ mod invalid_environment_variable_keys {
     #[test]
     fn cli_key_with_spaces_is_rejected() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgsBuilder::new(Command::Config)
             .environment_variables(&["INVALID KEY=value"])
             .build();
@@ -377,6 +393,8 @@ mod invalid_environment_variable_keys {
     #[test]
     fn cli_key_starting_with_digit_is_rejected() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgsBuilder::new(Command::Config)
             .environment_variables(&["1KEY=value"])
             .build();
@@ -399,6 +417,8 @@ mod invalid_environment_variable_keys {
     #[test]
     fn cli_key_with_hyphen_is_rejected() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgsBuilder::new(Command::Config)
             .environment_variables(&["MY-KEY=value"])
             .build();
@@ -421,6 +441,8 @@ mod invalid_environment_variable_keys {
     #[test]
     fn cli_inherit_format_with_invalid_key_is_rejected() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgsBuilder::new(Command::Config)
             .environment_variables(&["BAD KEY"])
             .build();
@@ -443,6 +465,8 @@ mod invalid_environment_variable_keys {
     #[test]
     fn cli_removal_format_with_invalid_key_is_rejected() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgsBuilder::new(Command::Config)
             .environment_variables(&["!BAD KEY"])
             .build();
@@ -523,6 +547,8 @@ mod invalid_environment_variable_keys {
     #[test]
     fn valid_key_with_underscores_and_digits_is_accepted() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgsBuilder::new(Command::Config)
             .environment_variables(&["_MY_VAR_2=value"])
             .build();
@@ -545,6 +571,8 @@ mod invalid_environment_variable_keys {
     #[test]
     fn valid_lowercase_key_is_accepted() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgsBuilder::new(Command::Config)
             .environment_variables(&["my_var=value"])
             .build();

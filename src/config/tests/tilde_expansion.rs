@@ -51,6 +51,8 @@ mod pre_build {
     #[test]
     fn tilde_in_cli_pre_build_is_expanded_to_home_dir() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgsBuilder::new(Command::Config)
             .pre_build("~/hooks/build.sh")
             .build();
@@ -230,6 +232,8 @@ mod volumes {
     #[test]
     fn tilde_in_cli_host_path_is_expanded_to_home_dir() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgsBuilder::new(Command::Config)
             .volumes(&["~/projects:/container"])
             .build();
@@ -469,6 +473,8 @@ mod pre_run {
     #[test]
     fn tilde_in_cli_pre_run_is_expanded_to_home_dir() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgsBuilder::new(Command::Config)
             .pre_run("~/hooks/run.sh")
             .build();

@@ -8,6 +8,8 @@ use tempfile::tempdir;
 #[test]
 fn default_build_arguments_is_empty() {
     let home_dir = tempdir().expect("Failed to create temporary directory");
+    let cwd = tempdir().expect("Failed to create temporary directory");
+    env::set_current_dir(cwd.path()).expect("Failed to set current directory");
     let cli_args = default_cli_args(Command::Config);
 
     let (_, config) = get_config(
@@ -208,6 +210,8 @@ mod parsing_cli_args {
     #[test]
     fn cli_build_arg_key_equals_value_format_parses_correctly() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgsBuilder::new(Command::Config)
             .build_arguments(&["MY_ARG=hello"])
             .build();
@@ -230,6 +234,8 @@ mod parsing_cli_args {
     #[test]
     fn cli_build_arg_key_equals_value_with_equals_in_value_parses_correctly() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgsBuilder::new(Command::Config)
             .build_arguments(&["MY_ARG=val=ue"])
             .build();
@@ -252,6 +258,8 @@ mod parsing_cli_args {
     #[test]
     fn cli_build_arg_key_only_means_inherit() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgsBuilder::new(Command::Config)
             .build_arguments(&["MY_ARG"])
             .build();
@@ -306,6 +314,8 @@ mod parsing_cli_args {
     #[test]
     fn cli_build_arg_empty_string_is_rejected() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgsBuilder::new(Command::Config)
             .build_arguments(&[""])
             .build();
@@ -367,6 +377,8 @@ mod invalid_build_argument_keys {
     #[test]
     fn cli_key_only_with_invalid_key_is_rejected() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgsBuilder::new(Command::Config)
             .build_arguments(&["1INVALID"])
             .build();
@@ -389,6 +401,8 @@ mod invalid_build_argument_keys {
     #[test]
     fn cli_key_with_spaces_is_rejected() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgsBuilder::new(Command::Config)
             .build_arguments(&["BAD KEY=value"])
             .build();
@@ -411,6 +425,8 @@ mod invalid_build_argument_keys {
     #[test]
     fn cli_key_starting_with_digit_is_rejected() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgsBuilder::new(Command::Config)
             .build_arguments(&["1KEY=value"])
             .build();

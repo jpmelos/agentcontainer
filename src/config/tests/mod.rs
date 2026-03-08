@@ -166,6 +166,8 @@ fn make_config() -> Config {
 #[test]
 fn no_configuration_sources_yields_default_configuration() {
     let home_dir = tempdir().expect("Failed to create temporary directory");
+    let cwd = tempdir().expect("Failed to create temporary directory");
+    env::set_current_dir(cwd.path()).expect("Failed to set current directory");
     let cli_args = default_cli_args(Command::Config);
 
     let (_, config) = get_config(
@@ -186,6 +188,8 @@ mod configuration_sources_are_read {
     #[test]
     fn xdg_config_file_is_read() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         write_file(
             &home_dir.path().join(".config/agentcontainer/config.toml"),
             r#"dockerfile = "from-xdg""#,
@@ -207,6 +211,8 @@ mod configuration_sources_are_read {
     #[test]
     fn home_dotfile_is_read() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         write_file(
             &home_dir.path().join(".agentcontainer/config.toml"),
             r#"dockerfile = "from-home-dotfile""#,
@@ -300,6 +306,8 @@ mod configuration_sources_are_read {
     #[test]
     fn env_var_is_read() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         // SAFETY:`set_var` is safe here because `cargo nextest` runs each test in its own process,
         // so there are no other threads to race with.
         unsafe {
@@ -322,6 +330,8 @@ mod configuration_sources_are_read {
     #[test]
     fn cli_arg_is_read() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgsBuilder::new(Command::Config)
             .dockerfile("from-cli")
             .build();
@@ -345,6 +355,8 @@ mod configuration_sources_priority_order {
     #[test]
     fn home_dotfile_overrides_xdg_config() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         write_file(
             &home_dir.path().join(".config/agentcontainer/config.toml"),
             r#"dockerfile = "from-xdg""#,
@@ -551,6 +563,8 @@ mod configuration_sources_priority_order {
     #[test]
     fn cli_arg_overrides_env_var() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         // SAFETY:`set_var` is safe here because `cargo nextest` runs each test in its own process,
         // so there are no other threads to race with.
         unsafe {
@@ -861,6 +875,8 @@ mod validation {
     #[test]
     fn username_not_slugifiable_is_an_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgsBuilder::new(Command::Config)
             .project_name("myproject")
             .username("@@@")
@@ -884,6 +900,8 @@ mod validation {
     #[test]
     fn project_name_not_slugifiable_is_an_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgsBuilder::new(Command::Config)
             .project_name("@@@")
             .username("alice")
@@ -906,6 +924,8 @@ mod validation {
     #[test]
     fn target_not_slugifiable_is_an_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgsBuilder::new(Command::Config)
             .project_name("myproject")
             .username("alice")
@@ -930,6 +950,8 @@ mod validation {
     #[test]
     fn force_rebuild_and_no_rebuild_together_is_an_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgsBuilder::new(Command::Build)
             .force_rebuild()
             .no_rebuild()
