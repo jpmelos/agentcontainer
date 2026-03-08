@@ -56,8 +56,6 @@ if [[ "${has_flag_n}" == false ]] \
     fi
 fi
 
-echo "Running pre-commit run" "$@" "${extra_args[@]}"
-
 tty_flag=()
 if [ -t 0 ]; then
     tty_flag=(-t)

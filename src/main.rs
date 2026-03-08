@@ -13,9 +13,8 @@ use build::BuildOutcome;
 use clap::Parser as _;
 use config::{CliArgs, Command};
 use std::env;
-use std::io::{IsTerminal as _, stderr, stdin};
+use std::io::{IsTerminal as _, stdin};
 use tracing::{info, warn};
-use tracing_subscriber::EnvFilter;
 use utils::clock::SystemClock;
 use utils::docker::RealDockerBackend;
 use utils::fs::RealFilesystem;
@@ -26,13 +25,7 @@ use utils::git::RealGitContext;
     reason = "This is a CLI application that needs to print output to stdout."
 )]
 fn main() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_env("AGENTCONTAINER_LOG_LEVEL")
-                .unwrap_or_else(|_| EnvFilter::new("info")),
-        )
-        .with_writer(stderr)
-        .init();
+    utils::logging::init()?;
 
     let home_dir = env::var("HOME").context("HOME environment variable is not set")?;
     let cli_args = CliArgs::parse();
