@@ -30,7 +30,7 @@ lowest to highest priority:
 | `dockerfile`            | `.agentcontainer/Dockerfile`                       | Path to the Dockerfile.                                                                                           |
 | `build_context`         | `.`                                                | Directory used as the Docker build context.                                                                       |
 | `build_arguments`       | _(empty)_                                          | Extra `--build-arg` flags for `docker build`. See [Build arguments](#build-arguments).                            |
-| `pre_build`             | _(none)_                                           | Path to an executable to run before `docker build`. See [Pre-build hook](#pre-build-hook).                        |
+| `pre_build`             | _(empty)_                                          | Paths to executables to run before `docker build`. See [Pre-build hooks](#pre-build-hooks).                       |
 | `project_name`          | Last component of the current directory, slugified | Name used in the Docker image tag.                                                                                |
 | `username`              | Current OS user (from `whoami`)                    | Username embedded in the image tag.                                                                               |
 | `target`                | _(none)_                                           | Docker build `--target`. When set, appended to the image tag.                                                     |
@@ -40,7 +40,7 @@ lowest to highest priority:
 | `no_rebuild`            | `false`                                            | Skip the build entirely. Errors if no image exists yet.                                                           |
 | `volumes`               | _(empty)_                                          | Host-to-container volume mounts. See [Volumes](#volumes).                                                         |
 | `environment_variables` | _(empty)_                                          | Environment variables for the container. See [Container environment variables](#container-environment-variables). |
-| `pre_run`               | _(none)_                                           | Path to an executable to run before `docker run`. See [Pre-run hook](#pre-run-hook).                              |
+| `pre_run`               | _(empty)_                                          | Paths to executables to run before `docker run`. See [Pre-run hooks](#pre-run-hooks).                             |
 
 `force_rebuild` and `no_rebuild` are mutually exclusive.
 
@@ -50,8 +50,9 @@ global config sets `target = "builder"`, a project config can override it with
 `target = "!"` to build without a target. The same works via environment
 variables (`AGENTCONTAINER_TARGET="!"`) and CLI (`--target "!"`).
 
-`dockerfile`, `build_context`, `pre_build`, `target`, and `pre_run` must not be
-set to an empty string. Setting any of them to `""` is a validation error.
+`dockerfile`, `build_context`, and `target` must not be set to an empty string.
+Setting any of them to `""` is a validation error. `pre_build` and `pre_run`
+entries must not be empty strings.
 
 ### Path resolution for `dockerfile` and `build_context`
 
@@ -113,22 +114,27 @@ agentcontainer build --build-arg '!OLD_ARG'
 Build argument keys must be valid POSIX identifiers: start with a letter or
 underscore, followed by ASCII letters, digits, or underscores.
 
-### Pre-build hook
+### Pre-build hooks
 
-The `pre_build` option specifies a path to an executable that runs before
-`docker build`. Its stdout is parsed as a TOML array of strings, and these
-strings are injected as extra arguments to the `docker build` command (after
-all built-in flags, but before the build context).
+The `pre_build` option specifies a list of paths to executables that run before
+`docker build`. Each hook's stdout is parsed as a TOML array of strings, and
+these strings are injected as extra arguments to the `docker build` command
+(after all built-in flags, but before the build context). Arguments from
+multiple hooks are concatenated in the order the hooks are listed.
+
+Lists from multiple config sources are concatenated (lower-priority first). For
+example, a hook defined in `config.toml` runs before one added via
+`config.local.toml` or the CLI.
 
 This provides a way to dynamically compute Docker build flags based on the host
 environment.
 
-**Note:** The pre-build hook runs unconditionally whenever a `build` or `run`
+**Note:** Pre-build hooks run unconditionally whenever a `build` or `run`
 command is invoked, even if the build is ultimately skipped (e.g. because the
-image is already up to date or `--no-rebuild` is set). Keep this in mind if the
+image is already up to date or `--no-rebuild` is set). Keep this in mind if a
 hook is expensive or has side effects.
 
-The hook must:
+Each hook must:
 
 - Exit with status 0.
 - Print a valid TOML array of strings to stdout (e.g.
@@ -146,7 +152,7 @@ cat <<EOF
 EOF
 ```
 
-A leading `~` in the path is expanded to the user's home directory. Only `~`
+A leading `~` in each path is expanded to the user's home directory. Only `~`
 alone or `~/…` is expanded; `~user/…` and embedded tildes are left untouched.
 Relative paths are resolved against the current working directory. All paths
 are lexically normalized: `.` and `..` components are resolved and consecutive
@@ -155,14 +161,16 @@ slashes are collapsed, without accessing the filesystem.
 In TOML configuration:
 
 ```toml
-pre_build = "~/hooks/pre-build.sh"
-pre_build = "scripts/pre-build.sh"   # resolved relative to the current working directory
+pre_build = ["~/hooks/pre-build.sh"]
+pre_build = ["scripts/pre-build.sh"]   # resolved relative to the current working directory
+pre_build = ["hooks/a.sh", "hooks/b.sh"]   # multiple hooks in one source
 ```
 
-On the CLI:
+On the CLI (repeatable):
 
 ```sh
 agentcontainer build --pre-build ~/hooks/pre-build.sh
+agentcontainer build --pre-build hooks/a.sh --pre-build hooks/b.sh
 ```
 
 ### Volumes
@@ -243,17 +251,22 @@ agentcontainer build -e '!OLD_VAR'
 Variable keys must be valid POSIX identifiers: start with a letter or
 underscore, followed by ASCII letters, digits, or underscores.
 
-### Pre-run hook
+### Pre-run hooks
 
-The `pre_run` option specifies a path to an executable that runs before
-`docker run`. Its stdout is parsed as a TOML array of strings, and these
-strings are injected as extra arguments to the `docker run` command (after all
-built-in flags, but before the image name).
+The `pre_run` option specifies a list of paths to executables that run before
+`docker run`. Each hook's stdout is parsed as a TOML array of strings, and
+these strings are injected as extra arguments to the `docker run` command
+(after all built-in flags, but before the image name). Arguments from multiple
+hooks are concatenated in the order the hooks are listed.
+
+Lists from multiple config sources are concatenated (lower-priority first). For
+example, a hook defined in `config.toml` runs before one added via
+`config.local.toml` or the CLI.
 
 This provides a way to dynamically compute Docker flags at runtime based on the
 host environment.
 
-The hook must:
+Each hook must:
 
 - Exit with status 0.
 - Print a valid TOML array of strings to stdout (e.g. `["--network", "host"]`).
@@ -266,7 +279,7 @@ Example hook script:
 echo '["--network", "host"]'
 ```
 
-A leading `~` in the path is expanded to the user's home directory, just like
+A leading `~` in each path is expanded to the user's home directory, just like
 for volume paths and `pre_build`. Only `~` alone or `~/…` is expanded;
 `~user/…` and embedded tildes are left untouched. Relative paths are resolved
 against the current working directory. All paths are lexically normalized: `.`
@@ -276,14 +289,16 @@ accessing the filesystem.
 In TOML configuration:
 
 ```toml
-pre_run = "~/hooks/pre-run.sh"
-pre_run = "scripts/pre-run.sh"   # resolved relative to the current working directory
+pre_run = ["~/hooks/pre-run.sh"]
+pre_run = ["scripts/pre-run.sh"]   # resolved relative to the current working directory
+pre_run = ["hooks/a.sh", "hooks/b.sh"]   # multiple hooks in one source
 ```
 
-On the CLI:
+On the CLI (repeatable):
 
 ```sh
 agentcontainer run --pre-run ~/hooks/pre-run.sh
+agentcontainer run --pre-run hooks/a.sh --pre-run hooks/b.sh
 ```
 
 ### Container naming
@@ -326,9 +341,11 @@ TOML. For example:
 AGENTCONTAINER_DOCKERFILE=".agentcontainer/Dockerfile"
 AGENTCONTAINER_BUILD_CONTEXT="."
 AGENTCONTAINER_BUILD_ARGUMENTS='{BUILD_DATE = "2026-03-06", HOME = true}'
+AGENTCONTAINER_PRE_BUILD='["~/hooks/pre-build.sh"]'
 AGENTCONTAINER_ALLOW_STALE=true # or `false`
 AGENTCONTAINER_VOLUMES='{"/workspace" = "~/projects/myproject", "~/.ssh" = true}'
 AGENTCONTAINER_ENVIRONMENT_VARIABLES='{EDITOR = "nvim", SSH_AUTH_SOCK = true}'
+AGENTCONTAINER_PRE_RUN='["~/hooks/pre-run.sh"]'
 ```
 
 ## Commands

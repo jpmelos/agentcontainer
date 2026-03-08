@@ -1,5 +1,5 @@
-pre_build = ".agentcontainer/get_build_args.sh"
-pre_run = ".agentcontainer/get_run_args.sh"
+pre_build = [".agentcontainer/get_build_args.sh"]
+pre_run = [".agentcontainer/get_run_args.sh"]
 
 [build_arguments]
 HOME = true

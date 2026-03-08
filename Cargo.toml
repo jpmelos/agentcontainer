@@ -233,3 +233,5 @@ pub_with_shorthand = "allow"
 # visibility level without having to change it later when a module is made
 # public.
 redundant_pub_crate = "allow"
+# Prefer semi-colons inside blocks. (The name of the lint is misleading!)
+semicolon_outside_block = "allow"

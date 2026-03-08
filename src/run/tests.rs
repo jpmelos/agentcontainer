@@ -13,7 +13,7 @@ fn make_config() -> Config {
         dockerfile: String::from(".agentcontainer/Dockerfile"),
         build_context: String::from("."),
         build_arguments: HashMap::new(),
-        pre_build: None,
+        pre_build: vec![],
         project_name: String::from("myproject"),
         username: String::from("alice"),
         target: None,
@@ -23,7 +23,7 @@ fn make_config() -> Config {
         no_rebuild: false,
         volumes: HashMap::new(),
         environment_variables: HashMap::new(),
-        pre_run: None,
+        pre_run: vec![],
     }
 }
 

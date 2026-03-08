@@ -1,25 +1,31 @@
 //! Process application configuration via configuration files, environment variables, and CLI
 //! arguments.
 
+mod cli;
+mod entries;
+mod error;
 mod merging_provider;
 
 use crate::utils::paths::{
     expand_and_resolve_path, has_tilde_user_prefix, is_relative_filesystem_path,
 };
 use crate::utils::slugify::slugify;
-use clap::{Parser, Subcommand};
+use cli::{
+    is_valid_env_var_key, parse_cli_build_arguments, parse_cli_environment_variables,
+    parse_cli_volumes,
+};
 use figment::{
     Figment,
     providers::{Env, Format as _, Serialized, Toml},
 };
 use merging_provider::MergingProvider;
-use serde::de::{Error as DeError, Visitor};
 use serde::{Deserialize, Serialize};
-use std::fmt::{Formatter, Result as FmtResult};
-use std::io::Error as IoError;
 use std::{collections::HashMap, env};
-use thiserror::Error as ThisError;
 use tracing::{debug, trace, warn};
+
+pub(crate) use cli::{CliArgs, Command};
+pub(crate) use entries::{BuildArgumentEntry, EnvironmentVariableEntry, VolumeEntry};
+pub(crate) use error::ConfigError;
 
 /// Default path to the Dockerfile.
 fn default_dockerfile() -> String {
@@ -48,186 +54,6 @@ fn default_username() -> String {
     whoami::username().unwrap_or_else(|_| String::from("unknown"))
 }
 
-/// A build argument entry: a literal value, a host-inherited value, or a removal sentinel.
-///
-/// In TOML and environment variables: a string = literal value; `true` = inherit from host
-/// environment; `false` = remove.
-///
-/// On the CLI: `"KEY=value"` = literal value; `"KEY"` (no `=`) = inherit from host environment;
-/// `"!KEY"` = remove.
-#[derive(Debug, Clone)]
-pub(crate) enum BuildArgumentEntry {
-    /// A literal value to pass as a `--build-arg` to `docker build`.
-    Value(String),
-    /// Inherit the build argument value from the host environment.
-    Inherit,
-    /// Removal sentinel.
-    Remove,
-}
-
-impl Serialize for BuildArgumentEntry {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        match *self {
-            Self::Value(ref value) => serializer.serialize_str(value),
-            Self::Inherit => serializer.serialize_bool(true),
-            Self::Remove => serializer.serialize_bool(false),
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for BuildArgumentEntry {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct BuildArgumentEntryVisitor;
-
-        impl Visitor<'_> for BuildArgumentEntryVisitor {
-            type Value = BuildArgumentEntry;
-
-            fn expecting(&self, formatter: &mut Formatter<'_>) -> FmtResult {
-                formatter
-                    .write_str("a string value, `true` to inherit from host, or `false` to remove")
-            }
-
-            fn visit_str<E: DeError>(self, v: &str) -> Result<Self::Value, E> {
-                Ok(BuildArgumentEntry::Value(String::from(v)))
-            }
-
-            fn visit_string<E: DeError>(self, v: String) -> Result<Self::Value, E> {
-                Ok(BuildArgumentEntry::Value(v))
-            }
-
-            fn visit_bool<E: DeError>(self, v: bool) -> Result<Self::Value, E> {
-                if v {
-                    Ok(BuildArgumentEntry::Inherit)
-                } else {
-                    Ok(BuildArgumentEntry::Remove)
-                }
-            }
-        }
-
-        deserializer.deserialize_any(BuildArgumentEntryVisitor)
-    }
-}
-
-/// A volume entry: an explicit host path, a same-path shorthand, or a removal sentinel.
-///
-/// In TOML and environment variables: a string = host path; `true` = mount at the same path as
-/// the container path key; `false` = remove.
-///
-/// On the CLI: `"/host:/container"` = explicit mount; `"/path"` (no colon) = same-path shorthand;
-/// `"!/container"` = remove.
-#[derive(Debug, Clone)]
-pub(crate) enum VolumeEntry {
-    /// The host path to mount at the container path key.
-    Active(String),
-    /// Mount the container path key at the same path on the host.
-    SamePath,
-    /// Removal sentinel.
-    Remove,
-}
-
-impl Serialize for VolumeEntry {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        match *self {
-            Self::Active(ref host_path) => serializer.serialize_str(host_path),
-            Self::SamePath => serializer.serialize_bool(true),
-            Self::Remove => serializer.serialize_bool(false),
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for VolumeEntry {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct VolumeEntryVisitor;
-
-        impl Visitor<'_> for VolumeEntryVisitor {
-            type Value = VolumeEntry;
-
-            fn expecting(&self, formatter: &mut Formatter<'_>) -> FmtResult {
-                formatter.write_str(
-                    "a host path string, `true` for same-path mount, or `false` to remove",
-                )
-            }
-
-            fn visit_str<E: DeError>(self, v: &str) -> Result<Self::Value, E> {
-                Ok(VolumeEntry::Active(String::from(v)))
-            }
-
-            fn visit_string<E: DeError>(self, v: String) -> Result<Self::Value, E> {
-                Ok(VolumeEntry::Active(v))
-            }
-
-            fn visit_bool<E: DeError>(self, v: bool) -> Result<Self::Value, E> {
-                if v {
-                    Ok(VolumeEntry::SamePath)
-                } else {
-                    Ok(VolumeEntry::Remove)
-                }
-            }
-        }
-
-        deserializer.deserialize_any(VolumeEntryVisitor)
-    }
-}
-
-/// An environment variable entry.
-///
-/// In TOML and environment variables: a string = literal value; `true` = inherit from host;
-/// `false` = remove / suppress.
-///
-/// On the CLI: `"KEY=value"` = literal value; `"KEY"` (no `=`) = inherit from host; `"!KEY"` =
-/// remove.
-#[derive(Debug, Clone)]
-pub(crate) enum EnvironmentVariableEntry {
-    /// A literal value to pass into the container.
-    Value(String),
-    /// Inherit the variable from the host environment.
-    Inherit,
-    /// Remove / suppress the variable in the container.
-    Remove,
-}
-
-impl Serialize for EnvironmentVariableEntry {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        match *self {
-            Self::Value(ref value) => serializer.serialize_str(value),
-            Self::Inherit => serializer.serialize_bool(true),
-            Self::Remove => serializer.serialize_bool(false),
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for EnvironmentVariableEntry {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct EnvironmentVariableEntryVisitor;
-
-        impl Visitor<'_> for EnvironmentVariableEntryVisitor {
-            type Value = EnvironmentVariableEntry;
-
-            fn expecting(&self, formatter: &mut Formatter<'_>) -> FmtResult {
-                formatter.write_str("a string value, `true` to inherit, or `false` to remove")
-            }
-
-            fn visit_str<E: DeError>(self, v: &str) -> Result<Self::Value, E> {
-                Ok(EnvironmentVariableEntry::Value(String::from(v)))
-            }
-
-            fn visit_string<E: DeError>(self, v: String) -> Result<Self::Value, E> {
-                Ok(EnvironmentVariableEntry::Value(v))
-            }
-
-            fn visit_bool<E: DeError>(self, v: bool) -> Result<Self::Value, E> {
-                if v {
-                    Ok(EnvironmentVariableEntry::Inherit)
-                } else {
-                    Ok(EnvironmentVariableEntry::Remove)
-                }
-            }
-        }
-
-        deserializer.deserialize_any(EnvironmentVariableEntryVisitor)
-    }
-}
-
 /// Application configuration.
 #[expect(
     clippy::struct_excessive_bools,
@@ -252,10 +78,11 @@ pub(crate) struct Config {
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub(crate) build_arguments: HashMap<String, BuildArgumentEntry>,
 
-    /// Path to an executable to run before `docker build`. Its stdout is parsed as a TOML list of
-    /// extra arguments to pass to the `docker build` command.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) pre_build: Option<String>,
+    /// Paths to executables to run before `docker build`. Their stdout is parsed as a TOML list of
+    /// extra arguments to pass to the `docker build` command. Lists from multiple config sources
+    /// are concatenated (lower-priority first).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) pre_build: Vec<String>,
 
     /// Project name used in Docker image tag.
     #[serde(default = "default_project_name")]
@@ -293,10 +120,11 @@ pub(crate) struct Config {
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub(crate) environment_variables: HashMap<String, EnvironmentVariableEntry>,
 
-    /// Path to an executable to run before `docker run`. Its stdout is parsed as a TOML list of
-    /// extra arguments to pass to the `docker run` command.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) pre_run: Option<String>,
+    /// Paths to executables to run before `docker run`. Their stdout is parsed as a TOML list of
+    /// extra arguments to pass to the `docker run` command. Lists from multiple config sources
+    /// are concatenated (lower-priority first).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) pre_run: Vec<String>,
 }
 
 impl Config {
@@ -342,196 +170,6 @@ impl Config {
         };
         truncated = truncated.trim_end_matches('_');
         format!("agentcontainer_{truncated}_{random_suffix}")
-    }
-}
-
-/// CLI arguments.
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "These flags directly mirror distinct CLI flags; a state machine would be \
-        inappropriate here."
-)]
-#[derive(Parser, Debug)]
-#[command(about, version)]
-pub(crate) struct CliArgs {
-    /// Path to the Dockerfile. Defaults to `.agentcontainer/Dockerfile`.
-    #[arg(long)]
-    dockerfile: Option<String>,
-
-    /// Directory used as the Docker build context. Defaults to the current working directory.
-    #[arg(long)]
-    build_context: Option<String>,
-
-    /// Build argument as "KEY=value", "KEY" (inherit from host), or "!KEY" (remove). Repeatable.
-    #[arg(long = "build-arg")]
-    build_arguments: Vec<String>,
-
-    /// Path to an executable to run before `docker build`. Its stdout is parsed as a TOML list of
-    /// extra arguments to pass to the `docker build` command (e.g. `["--label", "foo=bar"]`).
-    #[arg(long)]
-    pre_build: Option<String>,
-
-    /// Name used in Docker image tag. Defaults to the current working directory's name.
-    #[arg(long)]
-    project_name: Option<String>,
-
-    /// Username for image tag. Defaults to the current user's username.
-    #[arg(long)]
-    username: Option<String>,
-
-    /// Docker build `--target`. Also appended to image name. If not provided, no target is used.
-    #[arg(long)]
-    target: Option<String>,
-
-    /// Use stale image if build fails.
-    #[arg(long)]
-    allow_stale: bool,
-
-    /// Force rebuild regardless of staleness.
-    #[arg(long)]
-    force_rebuild: bool,
-
-    /// Pass `--no-cache` to `docker build`.
-    #[arg(long)]
-    no_build_cache: bool,
-
-    /// Skip rebuild; error if no image exists.
-    #[arg(long)]
-    no_rebuild: bool,
-
-    /// Volume as "host:container", "/path" (same path), or "!/path" (remove). Repeatable.
-    #[arg(long = "volume", short = 'v')]
-    volumes: Vec<String>,
-
-    /// Environment variable as "KEY=value", "KEY" (inherit), or "!KEY" (remove). Repeatable.
-    #[arg(long = "env", short = 'e')]
-    environment_variables: Vec<String>,
-
-    /// Path to an executable to run before `docker run`. Its stdout is parsed as a TOML list of
-    /// extra arguments to pass to the `docker run` command (e.g. `["--network", "host"]`).
-    #[arg(long)]
-    pre_run: Option<String>,
-
-    #[command(subcommand)]
-    command: Command,
-}
-
-/// Subcommands.
-#[derive(Subcommand, Debug, Clone)]
-pub(crate) enum Command {
-    /// Print the resolved configuration.
-    Config,
-    /// Build the agent container image.
-    Build,
-    /// Run the agent container.
-    Run {
-        /// Arguments to pass through to the container entrypoint. Must come after `--`.
-        #[arg(last = true)]
-        container_args: Vec<String>,
-    },
-}
-
-/// Errors that can be returned from `get_config`.
-#[derive(Debug, ThisError)]
-pub(crate) enum ConfigError {
-    /// The current working directory could not be determined.
-    #[error("Failed to determine the current working directory: {0}")]
-    CurrentWorkingDirectoryUnavailable(IoError),
-    /// The current working directory is not valid UTF-8.
-    #[error("The current working directory is not valid UTF-8")]
-    CurrentWorkingDirectoryNotUtf8,
-    /// The `dockerfile` path is empty.
-    #[error("`dockerfile` must not be empty")]
-    EmptyDockerfile,
-    /// The `build_context` path is empty.
-    #[error("`build_context` must not be empty")]
-    EmptyBuildContext,
-    /// A build argument CLI argument could not be parsed.
-    #[error("Invalid build argument value {value:?}: expected \"KEY=value\" or \"!KEY\"")]
-    InvalidBuildArgument {
-        /// The raw value that failed parsing.
-        value: String,
-    },
-    /// A build argument key is not a valid identifier.
-    #[error(
-        "Invalid build argument key {key:?}: must start with a letter or underscore and \
-         contain only ASCII letters, digits, and underscores"
-    )]
-    InvalidBuildArgumentKey {
-        /// The key that failed validation.
-        key: String,
-    },
-    /// The `pre_build` path is empty.
-    #[error("`pre_build` must not be empty")]
-    EmptyPreBuild,
-    /// The project name contains no alphanumeric characters and cannot produce a valid slug.
-    #[error("Invalid `project_name` value {project_name:?}: contains no alphanumeric characters")]
-    InvalidProjectName {
-        /// The raw project name that failed slugification.
-        project_name: String,
-    },
-    /// The username contains no alphanumeric characters and cannot produce a valid slug.
-    #[error("Invalid `username` value {username:?}: contains no alphanumeric characters")]
-    InvalidUsername {
-        /// The raw username that failed slugification.
-        username: String,
-    },
-    /// The `target` value is empty.
-    #[error("`target` must not be empty; use \"!\" to suppress an inherited value")]
-    EmptyTarget,
-    /// The `target` value contains no alphanumeric characters and cannot be slugified.
-    #[error("Invalid `target` value {target:?}: contains no alphanumeric characters")]
-    InvalidTarget {
-        /// The raw target value that failed slugification.
-        target: String,
-    },
-    /// `force_rebuild` and `no_rebuild` were both set, which is contradictory.
-    #[error("`force_rebuild` and `no_rebuild` are mutually exclusive")]
-    ConflictingRebuildFlags,
-    /// A volume value could not be parsed (bad CLI format).
-    #[error(
-        "Invalid volume value {value:?}: expected \"/host:/container\", \"/path\", or \
-         \"!/container\""
-    )]
-    InvalidVolume {
-        /// The raw value that failed parsing.
-        value: String,
-    },
-    /// A volume container path is not absolute.
-    #[error("Invalid volume path {path:?}: container paths must be absolute (start with \"/\")")]
-    InvalidVolumePath {
-        /// The container path that is not absolute.
-        path: String,
-    },
-    /// An environment variable CLI argument could not be parsed.
-    #[error(
-        "Invalid environment variable value {value:?}: expected \"KEY=value\", \"KEY\", or \
-         \"!KEY\""
-    )]
-    InvalidEnvironmentVariable {
-        /// The raw value that failed parsing.
-        value: String,
-    },
-    /// An environment variable key is not a valid identifier.
-    #[error(
-        "Invalid environment variable key {key:?}: must start with a letter or underscore and \
-         contain only ASCII letters, digits, and underscores"
-    )]
-    InvalidEnvironmentVariableKey {
-        /// The key that failed validation.
-        key: String,
-    },
-    /// The `pre_run` path is empty.
-    #[error("`pre_run` must not be empty")]
-    EmptyPreRun,
-    /// Figment failed to extract the configuration.
-    #[error("Failed to load configuration: {0}")]
-    Extract(Box<figment::Error>),
-}
-
-impl From<figment::Error> for ConfigError {
-    fn from(error: figment::Error) -> Self {
-        Self::Extract(Box::new(error))
     }
 }
 
@@ -627,25 +265,41 @@ pub(crate) fn get_config<'cli_args>(
     providers.push(Box::new(Toml::file(".agentcontainer/config.local.toml")));
     providers.push(Box::new(Env::prefixed("AGENTCONTAINER_")));
 
-    // CLI dict args (build_arguments, volumes, and environment_variables) are combined into a
-    // single provider so they travel together at the same priority level.
+    // CLI dict args (`build_arguments`, `volumes`, and `environment_variables`) are combined into
+    // a single provider so they travel together at the same priority level.
     {
-        // We build a combined owned config struct to hold all maps so the provider satisfies the
-        // `'static` lifetime bound required by `Box<dyn Provider>`.
         #[derive(Serialize)]
         struct CliDictArgs {
+            #[serde(skip_serializing_if = "HashMap::is_empty")]
             build_arguments: HashMap<String, BuildArgumentEntry>,
+            #[serde(skip_serializing_if = "HashMap::is_empty")]
             volumes: HashMap<String, VolumeEntry>,
+            #[serde(skip_serializing_if = "HashMap::is_empty")]
             environment_variables: HashMap<String, EnvironmentVariableEntry>,
         }
-        if !cli_build_args.is_empty() || !cli_volumes.is_empty() || !cli_env_vars.is_empty() {
-            let cli_dict_args = CliDictArgs {
-                build_arguments: cli_build_args,
-                volumes: cli_volumes,
-                environment_variables: cli_env_vars,
-            };
-            providers.push(Box::new(Serialized::defaults(cli_dict_args)));
+        let cli_dict_args = CliDictArgs {
+            build_arguments: cli_build_args,
+            volumes: cli_volumes,
+            environment_variables: cli_env_vars,
+        };
+        providers.push(Box::new(Serialized::defaults(cli_dict_args)));
+    }
+
+    // CLI list args (`pre_build`, `pre_run`): empty fields are skipped during serialization so
+    // that an absent flag does not override lists from lower-priority config sources.
+    {
+        #[derive(Serialize)]
+        struct CliListArgs {
+            #[serde(skip_serializing_if = "Vec::is_empty")]
+            pre_build: Vec<String>,
+            #[serde(skip_serializing_if = "Vec::is_empty")]
+            pre_run: Vec<String>,
         }
+        let cli_list_args = CliListArgs {
+            pre_build: cli_args.pre_build.clone(),
+            pre_run: cli_args.pre_run.clone(),
+        };
+        providers.push(Box::new(Serialized::defaults(cli_list_args)));
     }
 
     // CLI scalar and bool args, via the existing macros (only merged when actually provided/true).
@@ -654,11 +308,9 @@ pub(crate) fn get_config<'cli_args>(
         providers,
         dockerfile,
         build_context,
-        pre_build,
         project_name,
         username,
         target,
-        pre_run,
     );
     merge_bool_cli_args!(
         cli_args,
@@ -684,131 +336,6 @@ pub(crate) fn get_config<'cli_args>(
     trace!(?config, "Final resolved configuration");
 
     Ok((&cli_args.command, config))
-}
-
-/// Parse the list of `--build-arg` CLI arguments into a `HashMap<String, BuildArgumentEntry>`.
-///
-/// Accepted formats:
-/// - `"KEY=value"` → `("KEY", Value("value"))` (split on the first `=`)
-/// - `"KEY"` (no `=`) → `("KEY", Inherit)`
-/// - `"!KEY"` → `("KEY", Remove)`
-fn parse_cli_build_arguments(
-    raw_build_args: &[String],
-) -> Result<HashMap<String, BuildArgumentEntry>, ConfigError> {
-    let mut build_args = HashMap::new();
-    for raw in raw_build_args {
-        if raw.is_empty() {
-            return Err(ConfigError::InvalidBuildArgument { value: raw.clone() });
-        }
-        if let Some(key) = raw.strip_prefix('!') {
-            if !is_valid_env_var_key(key) {
-                return Err(ConfigError::InvalidBuildArgumentKey {
-                    key: String::from(key),
-                });
-            }
-            build_args.insert(String::from(key), BuildArgumentEntry::Remove);
-        } else if let Some((key, value)) = raw.split_once('=') {
-            if !is_valid_env_var_key(key) {
-                return Err(ConfigError::InvalidBuildArgumentKey {
-                    key: String::from(key),
-                });
-            }
-            build_args.insert(
-                String::from(key),
-                BuildArgumentEntry::Value(String::from(value)),
-            );
-        } else if !is_valid_env_var_key(raw) {
-            return Err(ConfigError::InvalidBuildArgumentKey { key: raw.clone() });
-        } else {
-            build_args.insert(raw.clone(), BuildArgumentEntry::Inherit);
-        }
-    }
-    Ok(build_args)
-}
-
-/// Parse the list of `--volume` CLI arguments into a `HashMap<String, VolumeEntry>`.
-///
-/// Accepted formats:
-/// - `"/host:/container"` → `("/container", Active("/host"))`
-/// - `"/path"` (no colon) → `("/path", SamePath)` — mount at the same path in the container.
-/// - `"!/container"` → `("/container", Remove)`
-fn parse_cli_volumes(raw_volumes: &[String]) -> Result<HashMap<String, VolumeEntry>, ConfigError> {
-    let mut volumes = HashMap::new();
-    for raw in raw_volumes {
-        if raw.is_empty() {
-            return Err(ConfigError::InvalidVolume { value: raw.clone() });
-        }
-        if let Some(container_path) = raw.strip_prefix('!') {
-            if container_path.is_empty() || container_path.contains(':') {
-                return Err(ConfigError::InvalidVolume { value: raw.clone() });
-            }
-            volumes.insert(String::from(container_path), VolumeEntry::Remove);
-        } else if let Some((host_path, container_path)) = raw.rsplit_once(':') {
-            if host_path.is_empty() || host_path.contains(':') || container_path.is_empty() {
-                return Err(ConfigError::InvalidVolume { value: raw.clone() });
-            }
-            volumes.insert(
-                String::from(container_path),
-                VolumeEntry::Active(String::from(host_path)),
-            );
-        } else {
-            volumes.insert(raw.clone(), VolumeEntry::SamePath);
-        }
-    }
-    Ok(volumes)
-}
-
-/// Parse the list of `--env` CLI arguments into a
-/// `HashMap<String, EnvironmentVariableEntry>`.
-///
-/// Accepted formats:
-/// - `"KEY=value"` → `("KEY", Value("value"))` (split on the first `=`)
-/// - `"KEY"` (no `=`) → `("KEY", Inherit)`
-/// - `"!KEY"` → `("KEY", Remove)`
-fn parse_cli_environment_variables(
-    raw_env_vars: &[String],
-) -> Result<HashMap<String, EnvironmentVariableEntry>, ConfigError> {
-    let mut env_vars = HashMap::new();
-    for raw in raw_env_vars {
-        if raw.is_empty() {
-            return Err(ConfigError::InvalidEnvironmentVariable { value: raw.clone() });
-        }
-        if let Some(key) = raw.strip_prefix('!') {
-            if !is_valid_env_var_key(key) {
-                return Err(ConfigError::InvalidEnvironmentVariableKey {
-                    key: String::from(key),
-                });
-            }
-            env_vars.insert(String::from(key), EnvironmentVariableEntry::Remove);
-        } else if let Some((key, value)) = raw.split_once('=') {
-            if !is_valid_env_var_key(key) {
-                return Err(ConfigError::InvalidEnvironmentVariableKey {
-                    key: String::from(key),
-                });
-            }
-            env_vars.insert(
-                String::from(key),
-                EnvironmentVariableEntry::Value(String::from(value)),
-            );
-        } else if !is_valid_env_var_key(raw) {
-            return Err(ConfigError::InvalidEnvironmentVariableKey { key: raw.clone() });
-        } else {
-            env_vars.insert(raw.clone(), EnvironmentVariableEntry::Inherit);
-        }
-    }
-    Ok(env_vars)
-}
-
-/// Check whether a string is a valid environment variable key.
-///
-/// Valid keys match the POSIX pattern `[A-Za-z_][A-Za-z0-9_]*`.
-fn is_valid_env_var_key(key: &str) -> bool {
-    !key.is_empty()
-        && key
-            .bytes()
-            .next()
-            .is_some_and(|b| b.is_ascii_alphabetic() || b == b'_')
-        && key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
 }
 
 /// Strip removal sentinels from a fully-merged `Config`.
@@ -853,7 +380,7 @@ fn validate_config(config: &Config) -> Result<(), ConfigError> {
         }
     }
 
-    if config.pre_build.as_deref() == Some("") {
+    if config.pre_build.iter().any(|path| path.is_empty()) {
         return Err(ConfigError::EmptyPreBuild);
     }
 
@@ -899,7 +426,7 @@ fn validate_config(config: &Config) -> Result<(), ConfigError> {
         }
     }
 
-    if config.pre_run.as_deref() == Some("") {
+    if config.pre_run.iter().any(|path| path.is_empty()) {
         return Err(ConfigError::EmptyPreRun);
     }
 
@@ -909,9 +436,9 @@ fn validate_config(config: &Config) -> Result<(), ConfigError> {
 /// Expand leading `~` to `home_dir` and resolve relative paths to absolute using the current
 /// working directory.
 ///
-/// For `dockerfile`, `build_context`, `pre_build`, and `pre_run`: tildes are expanded, and relative
-/// paths are resolved relative to the current working directory. These fields must not be empty;
-/// `validate_config` is expected to run before this function.
+/// For `dockerfile`, `build_context`, and each entry in `pre_build` and `pre_run`: tildes are
+/// expanded, and relative paths are resolved relative to the current working directory. These
+/// fields must not be empty; `validate_config` is expected to run before this function.
 ///
 /// For volume host paths: relative paths that look like filesystem paths (start with `.` or
 /// contain `/`) are resolved relative to the current working directory. Paths that do not start
@@ -938,7 +465,7 @@ fn expand_config_paths(config: &mut Config, home_dir: &str, cwd: &str) {
     }
     config.build_context = expand_and_resolve_path(&config.build_context, home_dir, cwd);
 
-    if let Some(ref mut pre_build_path) = config.pre_build {
+    for pre_build_path in &mut config.pre_build {
         if has_tilde_user_prefix(pre_build_path) {
             warn!(
                 path = %pre_build_path,
@@ -971,7 +498,7 @@ fn expand_config_paths(config: &mut Config, home_dir: &str, cwd: &str) {
         }
     }
 
-    if let Some(ref mut pre_run_path) = config.pre_run {
+    for pre_run_path in &mut config.pre_run {
         if has_tilde_user_prefix(pre_run_path) {
             warn!(
                 path = %pre_run_path,

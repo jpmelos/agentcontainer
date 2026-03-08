@@ -4,7 +4,8 @@ mod default_values;
 mod environment_variables;
 mod get_container_name;
 mod get_image_name;
-mod tilde_expansion;
+mod list_accumulation;
+mod path_expansion;
 mod validation;
 mod volumes;
 
@@ -21,7 +22,7 @@ struct CliArgsBuilder {
     dockerfile: Option<String>,
     build_context: Option<String>,
     build_arguments: Vec<String>,
-    pre_build: Option<String>,
+    pre_build: Vec<String>,
     project_name: Option<String>,
     username: Option<String>,
     target: Option<String>,
@@ -29,7 +30,7 @@ struct CliArgsBuilder {
     no_rebuild: bool,
     volumes: Vec<String>,
     environment_variables: Vec<String>,
-    pre_run: Option<String>,
+    pre_run: Vec<String>,
 }
 
 impl CliArgsBuilder {
@@ -41,7 +42,7 @@ impl CliArgsBuilder {
             dockerfile: None,
             build_context: None,
             build_arguments: vec![],
-            pre_build: None,
+            pre_build: vec![],
             project_name: None,
             username: None,
             target: None,
@@ -49,7 +50,7 @@ impl CliArgsBuilder {
             no_rebuild: false,
             volumes: vec![],
             environment_variables: vec![],
-            pre_run: None,
+            pre_run: vec![],
         }
     }
 
@@ -68,8 +69,8 @@ impl CliArgsBuilder {
         self
     }
 
-    fn pre_build(mut self, value: &str) -> Self {
-        self.pre_build = Some(String::from(value));
+    fn pre_build(mut self, values: &[&str]) -> Self {
+        self.pre_build = values.iter().map(|s| String::from(*s)).collect();
         self
     }
 
@@ -108,8 +109,8 @@ impl CliArgsBuilder {
         self
     }
 
-    fn pre_run(mut self, value: &str) -> Self {
-        self.pre_run = Some(String::from(value));
+    fn pre_run(mut self, values: &[&str]) -> Self {
+        self.pre_run = values.iter().map(|s| String::from(*s)).collect();
         self
     }
 
@@ -158,7 +159,7 @@ fn make_config() -> Config {
         dockerfile: String::from(".agentcontainer/Dockerfile"),
         build_context: String::from("."),
         build_arguments: HashMap::new(),
-        pre_build: None,
+        pre_build: vec![],
         project_name: String::from("myproject"),
         username: String::from("alice"),
         target: None,
@@ -168,7 +169,7 @@ fn make_config() -> Config {
         no_rebuild: false,
         volumes: HashMap::new(),
         environment_variables: HashMap::new(),
-        pre_run: None,
+        pre_run: vec![],
     }
 }
 

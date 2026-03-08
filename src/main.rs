@@ -57,7 +57,7 @@ fn main() -> Result<()> {
             let random_suffix = utils::random::random_name_suffix();
             let stdin_is_terminal = stdin().is_terminal();
 
-            let pre_run_extra_args = hooks::execute_pre_run_hook(config.pre_run.as_deref())?;
+            let pre_run_extra_args = hooks::execute_pre_run_hooks(&config.pre_run)?;
 
             info!("Running agent container");
 
@@ -84,7 +84,7 @@ fn main() -> Result<()> {
 
 /// Build the image and report the outcome to stderr.
 fn handle_build(config: &config::Config) -> Result<()> {
-    let pre_build_extra_args = hooks::execute_pre_build_hook(config.pre_build.as_deref())?;
+    let pre_build_extra_args = hooks::execute_pre_build_hooks(&config.pre_build)?;
 
     info!("Building agent container");
 

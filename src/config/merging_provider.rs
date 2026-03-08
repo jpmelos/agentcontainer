@@ -81,10 +81,12 @@ fn expand_tildes_in_volumes(dict: &mut Dict, home_dir: &str) {
 
 /// Merge `incoming` into `base` using controlled-depth semantics.
 ///
-/// - If both `base` and `incoming` have a dict at the same key, the inner entries of `incoming`
-///   are inserted into `base`'s dict atomically (no further recursion).
-/// - For all other cases (scalar vs. anything, or key only in `incoming`), `incoming` replaces
-///   `base`.
+/// - If both `base` and `incoming` have a dict at the same key, the inner entries of `incoming`'s
+///   dict are inserted into `base`'s dict atomically (no further recursion).
+/// - If both `base` and `incoming` have an array at the same key, the arrays are concatenated
+///   (`base` first, then `incoming`).
+/// - For all other cases (scalar vs. anything, or a key that only exists in `incoming`),
+///   `incoming` replaces `base`.
 fn merge_dicts(base: &mut Dict, incoming: &Dict) {
     for (key, incoming_value) in incoming {
         match (base.get_mut(key), incoming_value) {
@@ -96,6 +98,13 @@ fn merge_dicts(base: &mut Dict, incoming: &Dict) {
                 for (inner_key, inner_value) in incoming_inner {
                     base_inner.insert(inner_key.clone(), inner_value.clone());
                 }
+            }
+            (
+                Some(&mut Value::Array(_, ref mut base_items)),
+                &Value::Array(_, ref incoming_items),
+            ) => {
+                // Accumulate: lower-priority items first, higher-priority items appended.
+                base_items.extend(incoming_items.iter().cloned());
             }
             _ => {
                 base.insert(key.clone(), incoming_value.clone());

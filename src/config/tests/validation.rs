@@ -164,16 +164,12 @@ mod pre_build {
     use super::*;
 
     #[test]
-    fn empty_pre_build_in_config_file_is_an_error() {
+    fn empty_pre_build_entry_in_config_file_is_an_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
-            &home_dir.path().join(".agentcontainer/config.toml"),
-            r#"pre_build = "/usr/local/bin/setup.sh""#,
-        );
-        write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
-            r#"pre_build = """#,
+            r#"pre_build = [""]"#,
         );
         env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = default_cli_args(Command::Config);
@@ -185,7 +181,7 @@ mod pre_build {
                 .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect_err("Expected `get_config` to fail with an empty pre_build");
+        .expect_err("Expected `get_config` to fail with an empty pre_build entry");
 
         assert!(
             matches!(error, ConfigError::EmptyPreBuild),
@@ -194,18 +190,40 @@ mod pre_build {
     }
 
     #[test]
-    fn empty_pre_build_via_env_var_is_an_error() {
+    fn string_pre_build_in_config_file_is_a_config_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
-            r#"pre_build = "/usr/local/bin/setup.sh""#,
+            r#"pre_build = "not-a-list""#,
         );
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
+        let cli_args = default_cli_args(Command::Config);
+
+        let error = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8"),
+            &cli_args,
+        )
+        .expect_err("Expected `get_config` to fail with a non-list pre_build");
+
+        assert!(
+            matches!(error, ConfigError::Extract(_)),
+            "Expected `ConfigError::Extract`, got: {error:?}"
+        );
+    }
+
+    #[test]
+    fn empty_pre_build_entry_via_env_var_is_an_error() {
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
         env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         // SAFETY: `set_var` is safe here because `cargo nextest` runs each test in its own
         // process, so there are no other threads to race with.
         unsafe {
-            env::set_var("AGENTCONTAINER_PRE_BUILD", "");
+            env::set_var("AGENTCONTAINER_PRE_BUILD", r#"[""]"#);
         };
         let cli_args = default_cli_args(Command::Config);
 
@@ -216,7 +234,7 @@ mod pre_build {
                 .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect_err("Expected `get_config` to fail with an empty pre_build");
+        .expect_err("Expected `get_config` to fail with an empty pre_build entry");
 
         assert!(
             matches!(error, ConfigError::EmptyPreBuild),
@@ -225,15 +243,40 @@ mod pre_build {
     }
 
     #[test]
+    fn string_pre_build_via_env_var_is_a_config_error() {
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
+        // SAFETY: `set_var` is safe here because `cargo nextest` runs each test in its own
+        // process, so there are no other threads to race with.
+        unsafe {
+            env::set_var("AGENTCONTAINER_PRE_BUILD", "not-a-list");
+        };
+        let cli_args = default_cli_args(Command::Config);
+
+        let error = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8"),
+            &cli_args,
+        )
+        .expect_err("Expected `get_config` to fail with a non-list pre_build");
+
+        assert!(
+            matches!(error, ConfigError::Extract(_)),
+            "Expected `ConfigError::Extract`, got: {error:?}"
+        );
+    }
+
+    #[test]
     fn empty_pre_build_via_cli_is_an_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cwd = tempdir().expect("Failed to create temporary directory");
-        write_file(
-            &cwd.path().join(".agentcontainer/config.toml"),
-            r#"pre_build = "/usr/local/bin/setup.sh""#,
-        );
         env::set_current_dir(cwd.path()).expect("Failed to set current directory");
-        let cli_args = CliArgsBuilder::new(Command::Config).pre_build("").build();
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .pre_build(&[""])
+            .build();
 
         let error = get_config(
             home_dir
@@ -458,16 +501,12 @@ mod pre_run {
     use super::*;
 
     #[test]
-    fn empty_pre_run_in_config_file_is_an_error() {
+    fn empty_pre_run_entry_in_config_file_is_an_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
-            &home_dir.path().join(".agentcontainer/config.toml"),
-            r#"pre_run = "/usr/local/bin/setup.sh""#,
-        );
-        write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
-            r#"pre_run = """#,
+            r#"pre_run = [""]"#,
         );
         env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = default_cli_args(Command::Config);
@@ -479,7 +518,7 @@ mod pre_run {
                 .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect_err("Expected `get_config` to fail with an empty pre_run");
+        .expect_err("Expected `get_config` to fail with an empty pre_run entry");
 
         assert!(
             matches!(error, ConfigError::EmptyPreRun),
@@ -488,18 +527,40 @@ mod pre_run {
     }
 
     #[test]
-    fn empty_pre_run_via_env_var_is_an_error() {
+    fn string_pre_run_in_config_file_is_a_config_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
-            r#"pre_run = "/usr/local/bin/setup.sh""#,
+            r#"pre_run = "not-a-list""#,
         );
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
+        let cli_args = default_cli_args(Command::Config);
+
+        let error = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8"),
+            &cli_args,
+        )
+        .expect_err("Expected `get_config` to fail with a non-list pre_run");
+
+        assert!(
+            matches!(error, ConfigError::Extract(_)),
+            "Expected `ConfigError::Extract`, got: {error:?}"
+        );
+    }
+
+    #[test]
+    fn empty_pre_run_entry_via_env_var_is_an_error() {
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
         env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         // SAFETY: `set_var` is safe here because `cargo nextest` runs each test in its own
         // process, so there are no other threads to race with.
         unsafe {
-            env::set_var("AGENTCONTAINER_PRE_RUN", "");
+            env::set_var("AGENTCONTAINER_PRE_RUN", r#"[""]"#);
         };
         let cli_args = default_cli_args(Command::Config);
 
@@ -510,7 +571,7 @@ mod pre_run {
                 .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect_err("Expected `get_config` to fail with an empty pre_run");
+        .expect_err("Expected `get_config` to fail with an empty pre_run entry");
 
         assert!(
             matches!(error, ConfigError::EmptyPreRun),
@@ -519,15 +580,38 @@ mod pre_run {
     }
 
     #[test]
+    fn string_pre_run_via_env_var_is_a_config_error() {
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
+        // SAFETY: `set_var` is safe here because `cargo nextest` runs each test in its own
+        // process, so there are no other threads to race with.
+        unsafe {
+            env::set_var("AGENTCONTAINER_PRE_RUN", "not-a-list");
+        };
+        let cli_args = default_cli_args(Command::Config);
+
+        let error = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8"),
+            &cli_args,
+        )
+        .expect_err("Expected `get_config` to fail with a non-list pre_run");
+
+        assert!(
+            matches!(error, ConfigError::Extract(_)),
+            "Expected `ConfigError::Extract`, got: {error:?}"
+        );
+    }
+
+    #[test]
     fn empty_pre_run_via_cli_is_an_error() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cwd = tempdir().expect("Failed to create temporary directory");
-        write_file(
-            &cwd.path().join(".agentcontainer/config.toml"),
-            r#"pre_run = "/usr/local/bin/setup.sh""#,
-        );
         env::set_current_dir(cwd.path()).expect("Failed to set current directory");
-        let cli_args = CliArgsBuilder::new(Command::Config).pre_run("").build();
+        let cli_args = CliArgsBuilder::new(Command::Config).pre_run(&[""]).build();
 
         let error = get_config(
             home_dir

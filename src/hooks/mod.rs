@@ -6,32 +6,41 @@ use std::process::Command;
 use toml::de::Error as TomlError;
 use tracing::debug;
 
-/// Execute the pre-build hook if configured and return extra `docker build` arguments.
+/// Execute all pre-build hooks and return their concatenated extra `docker build` arguments.
 ///
-/// When `pre_build` is `Some`, the referenced executable is run and its stdout is parsed as a TOML
-/// array of strings (e.g. `["--label", "foo=bar"]`). If `pre_build` is `None`, an empty vector is
-/// returned.
-pub(crate) fn execute_pre_build_hook(pre_build: Option<&str>) -> Result<Vec<String>> {
-    execute_hook(pre_build, "Pre-build")
+/// Each hook in `pre_build` is executed in order. Their outputs are parsed as TOML arrays of
+/// strings (e.g. `["--label", "foo=bar"]`) and concatenated in the same order as the hooks.
+pub(crate) fn execute_pre_build_hooks(pre_build: &[String]) -> Result<Vec<String>> {
+    execute_hooks(pre_build, "Pre-build")
 }
 
-/// Execute the pre-run hook if configured and return extra `docker run` arguments.
+/// Execute all pre-run hooks and return their concatenated extra `docker run` arguments.
 ///
-/// When `pre_run` is `Some`, the referenced executable is run and its stdout is parsed as a TOML
-/// array of strings (e.g. `["--volume", "/host:/container"]`). If `pre_run` is `None`, an empty
-/// vector is returned.
-pub(crate) fn execute_pre_run_hook(pre_run: Option<&str>) -> Result<Vec<String>> {
-    execute_hook(pre_run, "Pre-run")
+/// Each hook in `pre_run` is executed in order. Their outputs are parsed as TOML arrays of
+/// strings (e.g. `["--volume", "/host:/container"]`) and concatenated in the same order as the
+/// hooks.
+pub(crate) fn execute_pre_run_hooks(pre_run: &[String]) -> Result<Vec<String>> {
+    execute_hooks(pre_run, "Pre-run")
 }
 
-/// Execute a hook executable and return the parsed extra arguments.
+/// Execute a list of hook executables and return the concatenated parsed extra arguments.
 ///
-/// `hook_label` is used in error messages to identify the hook (e.g. "Pre-build", "Pre-run").
-fn execute_hook(hook_path: Option<&str>, hook_label: &str) -> Result<Vec<String>> {
-    let Some(path) = hook_path else {
-        return Ok(Vec::new());
-    };
+/// `hook_label` is used in error messages to identify the hook kind (e.g. "Pre-build",
+/// "Pre-run"). Hooks are executed in order and their results are concatenated.
+fn execute_hooks(hook_paths: &[String], hook_label: &str) -> Result<Vec<String>> {
+    let mut all_args = Vec::new();
+    for path in hook_paths {
+        let args = execute_hook(path, hook_label)?;
+        all_args.extend(args);
+    }
+    Ok(all_args)
+}
 
+/// Execute a single hook executable and return the parsed extra arguments.
+///
+/// `hook_label` is used in error messages to identify the hook kind (e.g. "Pre-build",
+/// "Pre-run").
+fn execute_hook(path: &str, hook_label: &str) -> Result<Vec<String>> {
     debug!(hook_label, path, "Executing hook");
 
     let output = Command::new(path)
