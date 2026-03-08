@@ -134,7 +134,7 @@ mod parsing_toml {
     }
 
     #[test]
-    fn toml_same_path_format_is_parsed_correctly() {
+    fn toml_same_path_format_is_resolved_to_active() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
@@ -159,9 +159,9 @@ mod parsing_toml {
         assert!(
             matches!(
                 config.volumes.get("/container"),
-                Some(VolumeEntry::SamePath)
+                Some(VolumeEntry::Active(host)) if host == "/container"
             ),
-            "Expected `SamePath`, got: {:?}",
+            "Expected `Active(\"/container\")`, got: {:?}",
             config.volumes.get("/container")
         );
     }
@@ -200,7 +200,7 @@ mod parsing_env_var {
     use super::*;
 
     #[test]
-    fn env_var_same_path_volume_is_parsed_correctly() {
+    fn env_var_same_path_volume_is_resolved_to_active() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         // SAFETY: `set_var` is safe here because `cargo nextest` runs each test in its own process,
         // so there are no other threads to race with.
@@ -219,8 +219,11 @@ mod parsing_env_var {
         .expect("`get_config` failed");
 
         assert!(
-            matches!(config.volumes.get("/shared"), Some(VolumeEntry::SamePath)),
-            "Expected `SamePath`, got: {:?}",
+            matches!(
+                config.volumes.get("/shared"),
+                Some(VolumeEntry::Active(host)) if host == "/shared"
+            ),
+            "Expected `Active(\"/shared\")`, got: {:?}",
             config.volumes.get("/shared")
         );
     }
@@ -254,7 +257,7 @@ mod parsing_cli_args {
     }
 
     #[test]
-    fn cli_volume_same_path_format_is_parsed_correctly() {
+    fn cli_volume_same_path_format_is_resolved_to_active() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cwd = tempdir().expect("Failed to create temporary directory");
         env::set_current_dir(cwd.path()).expect("Failed to set current directory");
@@ -274,9 +277,9 @@ mod parsing_cli_args {
         assert!(
             matches!(
                 config.volumes.get("/same-path"),
-                Some(VolumeEntry::SamePath)
+                Some(VolumeEntry::Active(host)) if host == "/same-path"
             ),
-            "Expected `SamePath`, got: {:?}",
+            "Expected `Active(\"/same-path\")`, got: {:?}",
             config.volumes.get("/same-path")
         );
     }
@@ -394,8 +397,11 @@ mod priority {
         .expect("`get_config` failed");
 
         assert!(
-            matches!(config.volumes.get("/data"), Some(VolumeEntry::SamePath)),
-            "Expected `SamePath`, got: {:?}",
+            matches!(
+                config.volumes.get("/data"),
+                Some(VolumeEntry::Active(host)) if host == "/data"
+            ),
+            "Expected `Active(\"/data\")`, got: {:?}",
             config.volumes.get("/data")
         );
     }

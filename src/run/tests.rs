@@ -249,9 +249,10 @@ mod build_docker_run_args {
     #[test]
     fn includes_same_path_volume() {
         let mut config = make_config();
-        config
-            .volumes
-            .insert(String::from("/shared/data"), VolumeEntry::SamePath);
+        config.volumes.insert(
+            String::from("/shared/data"),
+            VolumeEntry::Active(String::from("/shared/data")),
+        );
         let args = RunArgsBuilder::new(&config).build();
 
         assert!(

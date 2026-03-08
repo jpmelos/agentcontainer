@@ -268,7 +268,7 @@ mod volumes {
     }
 
     #[test]
-    fn tilde_in_toml_same_path_key_is_expanded_to_home_dir() {
+    fn tilde_in_toml_same_path_key_is_expanded_to_home_dir_and_resolved_to_active() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
@@ -291,9 +291,9 @@ mod volumes {
         assert!(
             matches!(
                 config.volumes.get(expected_path.as_str()),
-                Some(VolumeEntry::SamePath)
+                Some(VolumeEntry::Active(host)) if host == &expected_path
             ),
-            "Expected `SamePath` at {expected_path:?}, got: {:?}",
+            "Expected `Active({expected_path:?})`, got: {:?}",
             config.volumes
         );
     }

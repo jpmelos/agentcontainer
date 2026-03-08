@@ -44,12 +44,23 @@ lowest to highest priority:
 
 `force_rebuild` and `no_rebuild` are mutually exclusive.
 
-`pre_build`, `target`, and `pre_run` can be unset by a higher-priority source
-by setting them to an empty string. This suppresses a value inherited from a
-lower-priority source. For example, if a global config sets
-`target = "builder"`, a project config can override it with `target = ""` to
-build without a target. The same works via environment variables
-(`AGENTCONTAINER_TARGET=""`) and CLI (`--target ""`).
+`target` can be unset by a higher-priority source by setting it to `"!"`. This
+suppresses a value inherited from a lower-priority source. For example, if a
+global config sets `target = "builder"`, a project config can override it with
+`target = "!"` to build without a target. The same works via environment
+variables (`AGENTCONTAINER_TARGET="!"`) and CLI (`--target "!"`).
+
+`dockerfile`, `build_context`, `pre_build`, `target`, and `pre_run` must not be
+set to an empty string. Setting any of them to `""` is a validation error.
+
+### Path resolution for `dockerfile` and `build_context`
+
+A leading `~` in `dockerfile` or `build_context` is expanded to the user's home
+directory. Only `~` alone or `~/…` is expanded; `~user/…` and embedded tildes
+are left untouched. Relative paths are resolved against the current working
+directory. All paths are lexically normalized: `.` and `..` components are
+resolved and consecutive slashes are collapsed, without accessing the
+filesystem.
 
 ### Image naming
 

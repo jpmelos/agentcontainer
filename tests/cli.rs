@@ -26,6 +26,11 @@ mod tests {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cwd = tempdir().expect("Failed to create temporary directory");
 
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
+
         // Compute the expected `project_name` default the same way the production code does:
         // the last component of the CWD path, as-is.
         let expected_project_name = cwd
@@ -59,9 +64,10 @@ mod tests {
             .env_remove("AGENTCONTAINER_PRE_RUN")
             .current_dir(cwd.path());
 
+        let expected_dockerfile = format!("{cwd_str}/.agentcontainer/Dockerfile");
         let expected_output = format!(
-            "dockerfile = \".agentcontainer/Dockerfile\"\n\
-             build_context = \".\"\n\
+            "dockerfile = \"{expected_dockerfile}\"\n\
+             build_context = \"{cwd_str}\"\n\
              project_name = \"{expected_project_name}\"\n\
              username = \"{expected_username}\"\n"
         );
@@ -74,19 +80,31 @@ mod tests {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cwd = tempdir().expect("Failed to create temporary directory");
 
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
+
         Command::new(cargo_bin!("agentcontainer"))
             .args(["--dockerfile", "custom.Dockerfile", "config"])
             .env("HOME", home_dir.path())
             .current_dir(cwd.path())
             .assert()
             .success()
-            .stdout(contains(r#"dockerfile = "custom.Dockerfile""#));
+            .stdout(contains(format!(
+                r#"dockerfile = "{cwd_str}/custom.Dockerfile""#
+            )));
     }
 
     #[test]
     fn config_subcommand_respects_env_var() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cwd = tempdir().expect("Failed to create temporary directory");
+
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
 
         Command::new(cargo_bin!("agentcontainer"))
             .arg("config")
@@ -95,7 +113,7 @@ mod tests {
             .current_dir(cwd.path())
             .assert()
             .success()
-            .stdout(contains(r#"dockerfile = "from-env""#));
+            .stdout(contains(format!(r#"dockerfile = "{cwd_str}/from-env""#)));
     }
 
     #[test]
@@ -107,13 +125,18 @@ mod tests {
             r#"dockerfile = "from-cwd""#,
         );
 
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
+
         Command::new(cargo_bin!("agentcontainer"))
             .arg("config")
             .env("HOME", home_dir.path())
             .current_dir(cwd.path())
             .assert()
             .success()
-            .stdout(contains(r#"dockerfile = "from-cwd""#));
+            .stdout(contains(format!(r#"dockerfile = "{cwd_str}/from-cwd""#)));
     }
 
     #[test]
@@ -125,13 +148,20 @@ mod tests {
             r#"dockerfile = "from-cwd-local""#,
         );
 
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
+
         Command::new(cargo_bin!("agentcontainer"))
             .arg("config")
             .env("HOME", home_dir.path())
             .current_dir(cwd.path())
             .assert()
             .success()
-            .stdout(contains(r#"dockerfile = "from-cwd-local""#));
+            .stdout(contains(format!(
+                r#"dockerfile = "{cwd_str}/from-cwd-local""#
+            )));
     }
 
     #[test]
@@ -143,13 +173,20 @@ mod tests {
             r#"dockerfile = "from-home-dotfile""#,
         );
 
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
+
         Command::new(cargo_bin!("agentcontainer"))
             .arg("config")
             .env("HOME", home_dir.path())
             .current_dir(cwd.path())
             .assert()
             .success()
-            .stdout(contains(r#"dockerfile = "from-home-dotfile""#));
+            .stdout(contains(format!(
+                r#"dockerfile = "{cwd_str}/from-home-dotfile""#
+            )));
     }
 
     #[test]
@@ -161,13 +198,18 @@ mod tests {
             r#"dockerfile = "from-xdg""#,
         );
 
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
+
         Command::new(cargo_bin!("agentcontainer"))
             .arg("config")
             .env("HOME", home_dir.path())
             .current_dir(cwd.path())
             .assert()
             .success()
-            .stdout(contains(r#"dockerfile = "from-xdg""#));
+            .stdout(contains(format!(r#"dockerfile = "{cwd_str}/from-xdg""#)));
     }
 
     #[test]

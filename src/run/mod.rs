@@ -135,8 +135,10 @@ fn build_docker_run_args(
                 args.push(format!("{host_path}:{container_path}"));
             }
             VolumeEntry::SamePath => {
-                args.push(String::from("-v"));
-                args.push(format!("{container_path}:{container_path}"));
+                unreachable!(
+                    "`SamePath` entries are resolved to `Active` by `expand_config_paths` \
+                     before `run` is called."
+                )
             }
             VolumeEntry::Remove => {
                 unreachable!(

@@ -440,6 +440,12 @@ pub(crate) enum ConfigError {
     /// The current working directory is not valid UTF-8.
     #[error("The current working directory is not valid UTF-8")]
     CurrentWorkingDirectoryNotUtf8,
+    /// The `dockerfile` path is empty.
+    #[error("`dockerfile` must not be empty")]
+    EmptyDockerfile,
+    /// The `build_context` path is empty.
+    #[error("`build_context` must not be empty")]
+    EmptyBuildContext,
     /// A build argument CLI argument could not be parsed.
     #[error("Invalid build argument value {value:?}: expected \"KEY=value\" or \"!KEY\"")]
     InvalidBuildArgument {
@@ -455,6 +461,9 @@ pub(crate) enum ConfigError {
         /// The key that failed validation.
         key: String,
     },
+    /// The `pre_build` path is empty.
+    #[error("`pre_build` must not be empty")]
+    EmptyPreBuild,
     /// The project name contains no alphanumeric characters and cannot produce a valid slug.
     #[error("Invalid `project_name` value {project_name:?}: contains no alphanumeric characters")]
     InvalidProjectName {
@@ -467,6 +476,9 @@ pub(crate) enum ConfigError {
         /// The raw username that failed slugification.
         username: String,
     },
+    /// The `target` value is empty.
+    #[error("`target` must not be empty; use \"!\" to suppress an inherited value")]
+    EmptyTarget,
     /// The `target` value contains no alphanumeric characters and cannot be slugified.
     #[error("Invalid `target` value {target:?}: contains no alphanumeric characters")]
     InvalidTarget {
@@ -509,6 +521,9 @@ pub(crate) enum ConfigError {
         /// The key that failed validation.
         key: String,
     },
+    /// The `pre_run` path is empty.
+    #[error("`pre_run` must not be empty")]
+    EmptyPreRun,
     /// Figment failed to extract the configuration.
     #[error("Failed to load configuration: {0}")]
     Extract(Box<figment::Error>),
@@ -662,9 +677,9 @@ pub(crate) fn get_config<'cli_args>(
     let cwd_str = cwd
         .to_str()
         .ok_or(ConfigError::CurrentWorkingDirectoryNotUtf8)?;
-    expand_config_paths(&mut config, home_dir, cwd_str);
-    validate_config(&config)?;
     clean_config(&mut config);
+    validate_config(&config)?;
+    expand_config_paths(&mut config, home_dir, cwd_str);
 
     trace!(?config, "Final resolved configuration");
 
@@ -796,66 +811,50 @@ fn is_valid_env_var_key(key: &str) -> bool {
         && key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
 }
 
-/// Expand leading `~` to `home_dir` and resolve relative paths to absolute using the current
-/// working directory.
+/// Strip removal sentinels from a fully-merged `Config`.
 ///
-/// For `pre_build` and `pre_run`: tildes are expanded, and relative paths are resolved relative to
-/// the current working directory.
+/// Entries marked `Remove` instruct higher-priority layers to suppress a key inherited from a
+/// lower-priority layer. Once merging is complete they carry no further information and are
+/// removed so that callers see only the final, actionable set of entries.
 ///
-/// For volume host paths: relative paths that look like filesystem paths (start with `.` or
-/// contain `/`) are resolved relative to the current working directory. Paths that do not start
-/// with `.` and do not contain `/` are treated as Docker volume names and left unchanged.
-fn expand_config_paths(config: &mut Config, home_dir: &str, cwd: &str) {
-    if let Some(ref mut pre_build_path) = config.pre_build
-        && !pre_build_path.is_empty()
-    {
-        if has_tilde_user_prefix(pre_build_path) {
-            warn!(
-                path = %pre_build_path,
-                "The `~user` syntax is not supported in `pre_build`; \
-                 treating as a relative path."
-            );
-        }
-        *pre_build_path = expand_and_resolve_path(pre_build_path, home_dir, cwd);
+/// For `target`, `"!"` acts as a removal sentinel: a higher-priority layer can set it to `"!"`
+/// to suppress a value inherited from a lower-priority layer.
+fn clean_config(config: &mut Config) {
+    config
+        .build_arguments
+        .retain(|_, entry| !matches!(entry, BuildArgumentEntry::Remove));
+
+    if config.target.as_deref() == Some("!") {
+        config.target = None;
     }
 
-    for (container_path, entry) in &mut config.volumes {
-        if let VolumeEntry::Active(ref mut host_path) = *entry
-            && !host_path.starts_with('/')
-            && is_relative_filesystem_path(host_path)
-        {
-            if has_tilde_user_prefix(host_path) {
-                warn!(
-                    volume = %container_path,
-                    path = %host_path,
-                    "The `~user` syntax is not supported in volume host paths; \
-                     treating as a relative path."
-                );
-            }
-            *host_path = expand_and_resolve_path(host_path, home_dir, cwd);
-        }
-    }
+    config
+        .volumes
+        .retain(|_, entry| !matches!(entry, VolumeEntry::Remove));
 
-    if let Some(ref mut pre_run_path) = config.pre_run
-        && !pre_run_path.is_empty()
-    {
-        if has_tilde_user_prefix(pre_run_path) {
-            warn!(
-                path = %pre_run_path,
-                "The `~user` syntax is not supported in `pre_run`; \
-                 treating as a relative path."
-            );
-        }
-        *pre_run_path = expand_and_resolve_path(pre_run_path, home_dir, cwd);
-    }
+    config
+        .environment_variables
+        .retain(|_, entry| !matches!(entry, EnvironmentVariableEntry::Remove));
 }
 
 /// Validate a fully-merged `Config`, returning the first error found.
 fn validate_config(config: &Config) -> Result<(), ConfigError> {
+    if config.dockerfile.is_empty() {
+        return Err(ConfigError::EmptyDockerfile);
+    }
+
+    if config.build_context.is_empty() {
+        return Err(ConfigError::EmptyBuildContext);
+    }
+
     for key in config.build_arguments.keys() {
         if !is_valid_env_var_key(key) {
             return Err(ConfigError::InvalidBuildArgumentKey { key: key.clone() });
         }
+    }
+
+    if config.pre_build.as_deref() == Some("") {
+        return Err(ConfigError::EmptyPreBuild);
     }
 
     if slugify(&config.project_name).is_empty() {
@@ -870,8 +869,11 @@ fn validate_config(config: &Config) -> Result<(), ConfigError> {
         });
     }
 
+    if config.target.as_deref() == Some("") {
+        return Err(ConfigError::EmptyTarget);
+    }
+
     if let Some(ref target) = config.target
-        && !target.is_empty()
         && slugify(target).is_empty()
     {
         return Err(ConfigError::InvalidTarget {
@@ -897,41 +899,87 @@ fn validate_config(config: &Config) -> Result<(), ConfigError> {
         }
     }
 
+    if config.pre_run.as_deref() == Some("") {
+        return Err(ConfigError::EmptyPreRun);
+    }
+
     Ok(())
 }
 
-/// Strip removal sentinels from a fully-merged `Config`.
+/// Expand leading `~` to `home_dir` and resolve relative paths to absolute using the current
+/// working directory.
 ///
-/// Entries marked `Remove` instruct higher-priority layers to suppress a key inherited from a
-/// lower-priority layer. Once merging is complete they carry no further information and are
-/// removed so that callers see only the final, actionable set of entries.
+/// For `dockerfile`, `build_context`, `pre_build`, and `pre_run`: tildes are expanded, and relative
+/// paths are resolved relative to the current working directory. These fields must not be empty;
+/// `validate_config` is expected to run before this function.
 ///
-/// For `pre_build`, `target`, and `pre_run`, an empty string acts as a removal sentinel: a
-/// higher-priority layer can set any of them to `""` to suppress a value inherited from a
-/// lower-priority layer.
-fn clean_config(config: &mut Config) {
-    config
-        .build_arguments
-        .retain(|_, entry| !matches!(entry, BuildArgumentEntry::Remove));
+/// For volume host paths: relative paths that look like filesystem paths (start with `.` or
+/// contain `/`) are resolved relative to the current working directory. Paths that do not start
+/// with `.` and do not contain `/` are treated as Docker volume names and left unchanged.
+/// `SamePath` entries are converted to `Active` with the container path as the host path.
+fn expand_config_paths(config: &mut Config, home_dir: &str, cwd: &str) {
+    // Resolve `dockerfile` to an absolute path.
+    if has_tilde_user_prefix(&config.dockerfile) {
+        warn!(
+            path = %config.dockerfile,
+            "The `~user` syntax is not supported in `dockerfile`; \
+             treating as a relative path."
+        );
+    }
+    config.dockerfile = expand_and_resolve_path(&config.dockerfile, home_dir, cwd);
 
-    if config.pre_build.as_deref() == Some("") {
-        config.pre_build = None;
+    // Resolve `build_context` to an absolute path.
+    if has_tilde_user_prefix(&config.build_context) {
+        warn!(
+            path = %config.build_context,
+            "The `~user` syntax is not supported in `build_context`; \
+             treating as a relative path."
+        );
+    }
+    config.build_context = expand_and_resolve_path(&config.build_context, home_dir, cwd);
+
+    if let Some(ref mut pre_build_path) = config.pre_build {
+        if has_tilde_user_prefix(pre_build_path) {
+            warn!(
+                path = %pre_build_path,
+                "The `~user` syntax is not supported in `pre_build`; \
+                 treating as a relative path."
+            );
+        }
+        *pre_build_path = expand_and_resolve_path(pre_build_path, home_dir, cwd);
     }
 
-    if config.target.as_deref() == Some("") {
-        config.target = None;
+    for (container_path, entry) in &mut config.volumes {
+        match *entry {
+            VolumeEntry::Active(ref mut host_path)
+                if !host_path.starts_with('/') && is_relative_filesystem_path(host_path) =>
+            {
+                if has_tilde_user_prefix(host_path) {
+                    warn!(
+                        volume = %container_path,
+                        path = %host_path,
+                        "The `~user` syntax is not supported in volume host paths; \
+                         treating as a relative path."
+                    );
+                }
+                *host_path = expand_and_resolve_path(host_path, home_dir, cwd);
+            }
+            VolumeEntry::SamePath => {
+                *entry = VolumeEntry::Active(container_path.clone());
+            }
+            _ => {}
+        }
     }
 
-    config
-        .volumes
-        .retain(|_, entry| !matches!(entry, VolumeEntry::Remove));
-
-    config
-        .environment_variables
-        .retain(|_, entry| !matches!(entry, EnvironmentVariableEntry::Remove));
-
-    if config.pre_run.as_deref() == Some("") {
-        config.pre_run = None;
+    if let Some(ref mut pre_run_path) = config.pre_run {
+        if has_tilde_user_prefix(pre_run_path) {
+            warn!(
+                path = %pre_run_path,
+                "The `~user` syntax is not supported in `pre_run`; \
+                 treating as a relative path."
+            );
+        }
+        *pre_run_path = expand_and_resolve_path(pre_run_path, home_dir, cwd);
     }
 }
 

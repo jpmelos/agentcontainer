@@ -1,9 +1,11 @@
 mod build_arguments;
-mod empty_string_removal;
+mod clean;
+mod default_values;
 mod environment_variables;
 mod get_container_name;
 mod get_image_name;
 mod tilde_expansion;
+mod validation;
 mod volumes;
 
 use super::{
@@ -17,6 +19,7 @@ use tempfile::tempdir;
 struct CliArgsBuilder {
     command: Command,
     dockerfile: Option<String>,
+    build_context: Option<String>,
     build_arguments: Vec<String>,
     pre_build: Option<String>,
     project_name: Option<String>,
@@ -36,6 +39,7 @@ impl CliArgsBuilder {
         Self {
             command,
             dockerfile: None,
+            build_context: None,
             build_arguments: vec![],
             pre_build: None,
             project_name: None,
@@ -51,6 +55,11 @@ impl CliArgsBuilder {
 
     fn dockerfile(mut self, value: &str) -> Self {
         self.dockerfile = Some(String::from(value));
+        self
+    }
+
+    fn build_context(mut self, value: &str) -> Self {
+        self.build_context = Some(String::from(value));
         self
     }
 
@@ -109,7 +118,7 @@ impl CliArgsBuilder {
         CliArgs {
             command: self.command,
             dockerfile: self.dockerfile,
-            build_context: None,
+            build_context: self.build_context,
             build_arguments: self.build_arguments,
             pre_build: self.pre_build,
             project_name: self.project_name,
@@ -170,6 +179,10 @@ fn no_configuration_sources_yields_default_configuration() {
     env::set_current_dir(cwd.path()).expect("Failed to set current directory");
     let cli_args = default_cli_args(Command::Config);
 
+    let cwd_str = cwd
+        .path()
+        .to_str()
+        .expect("Temporary directory path is not valid UTF-8");
     let (_, config) = get_config(
         home_dir
             .path()
@@ -179,7 +192,10 @@ fn no_configuration_sources_yields_default_configuration() {
     )
     .expect("`get_config` failed");
 
-    assert_eq!(config.dockerfile, ".agentcontainer/Dockerfile");
+    assert_eq!(
+        config.dockerfile,
+        format!("{cwd_str}/.agentcontainer/Dockerfile")
+    );
 }
 
 mod configuration_sources_are_read {
@@ -196,6 +212,10 @@ mod configuration_sources_are_read {
         );
         let cli_args = default_cli_args(Command::Config);
 
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
         let (_, config) = get_config(
             home_dir
                 .path()
@@ -205,7 +225,7 @@ mod configuration_sources_are_read {
         )
         .expect("`get_config` failed");
 
-        assert_eq!(config.dockerfile, "from-xdg");
+        assert_eq!(config.dockerfile, format!("{cwd_str}/from-xdg"));
     }
 
     #[test]
@@ -219,6 +239,10 @@ mod configuration_sources_are_read {
         );
         let cli_args = default_cli_args(Command::Config);
 
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
         let (_, config) = get_config(
             home_dir
                 .path()
@@ -228,7 +252,7 @@ mod configuration_sources_are_read {
         )
         .expect("`get_config` failed");
 
-        assert_eq!(config.dockerfile, "from-home-dotfile");
+        assert_eq!(config.dockerfile, format!("{cwd_str}/from-home-dotfile"));
     }
 
     #[test]
@@ -245,6 +269,9 @@ mod configuration_sources_are_read {
         env::set_current_dir(&cwd).expect("Failed to set current directory");
         let cli_args = default_cli_args(Command::Config);
 
+        let cwd_str = cwd
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
         let (_, config) = get_config(
             home_dir
                 .path()
@@ -254,7 +281,7 @@ mod configuration_sources_are_read {
         )
         .expect("`get_config` failed");
 
-        assert_eq!(config.dockerfile, "from-ancestor");
+        assert_eq!(config.dockerfile, format!("{cwd_str}/from-ancestor"));
     }
 
     #[test]
@@ -268,6 +295,10 @@ mod configuration_sources_are_read {
         env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = default_cli_args(Command::Config);
 
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
         let (_, config) = get_config(
             home_dir
                 .path()
@@ -277,7 +308,7 @@ mod configuration_sources_are_read {
         )
         .expect("`get_config` failed");
 
-        assert_eq!(config.dockerfile, "from-cwd");
+        assert_eq!(config.dockerfile, format!("{cwd_str}/from-cwd"));
     }
 
     #[test]
@@ -291,6 +322,10 @@ mod configuration_sources_are_read {
         env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = default_cli_args(Command::Config);
 
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
         let (_, config) = get_config(
             home_dir
                 .path()
@@ -300,7 +335,7 @@ mod configuration_sources_are_read {
         )
         .expect("`get_config` failed");
 
-        assert_eq!(config.dockerfile, "from-cwd-local");
+        assert_eq!(config.dockerfile, format!("{cwd_str}/from-cwd-local"));
     }
 
     #[test]
@@ -315,6 +350,10 @@ mod configuration_sources_are_read {
         };
         let cli_args = default_cli_args(Command::Config);
 
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
         let (_, config) = get_config(
             home_dir
                 .path()
@@ -324,7 +363,7 @@ mod configuration_sources_are_read {
         )
         .expect("`get_config` failed");
 
-        assert_eq!(config.dockerfile, "from-env");
+        assert_eq!(config.dockerfile, format!("{cwd_str}/from-env"));
     }
 
     #[test]
@@ -336,6 +375,10 @@ mod configuration_sources_are_read {
             .dockerfile("from-cli")
             .build();
 
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
         let (_, config) = get_config(
             home_dir
                 .path()
@@ -345,7 +388,7 @@ mod configuration_sources_are_read {
         )
         .expect("`get_config` failed");
 
-        assert_eq!(config.dockerfile, "from-cli");
+        assert_eq!(config.dockerfile, format!("{cwd_str}/from-cli"));
     }
 }
 
@@ -367,6 +410,10 @@ mod configuration_sources_priority_order {
         );
         let cli_args = default_cli_args(Command::Config);
 
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
         let (_, config) = get_config(
             home_dir
                 .path()
@@ -376,7 +423,7 @@ mod configuration_sources_priority_order {
         )
         .expect("`get_config` failed");
 
-        assert_eq!(config.dockerfile, "from-home-dotfile");
+        assert_eq!(config.dockerfile, format!("{cwd_str}/from-home-dotfile"));
     }
 
     #[test]
@@ -397,6 +444,9 @@ mod configuration_sources_priority_order {
         env::set_current_dir(&cwd).expect("Failed to set current directory");
         let cli_args = default_cli_args(Command::Config);
 
+        let cwd_str = cwd
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
         let (_, config) = get_config(
             home_dir
                 .path()
@@ -406,7 +456,7 @@ mod configuration_sources_priority_order {
         )
         .expect("`get_config` failed");
 
-        assert_eq!(config.dockerfile, "from-ancestor");
+        assert_eq!(config.dockerfile, format!("{cwd_str}/from-ancestor"));
     }
 
     #[test]
@@ -430,6 +480,9 @@ mod configuration_sources_priority_order {
         env::set_current_dir(&grandchild).expect("Failed to set current directory");
         let cli_args = default_cli_args(Command::Config);
 
+        let cwd_str = grandchild
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
         let (_, config) = get_config(
             home_dir
                 .path()
@@ -439,7 +492,7 @@ mod configuration_sources_priority_order {
         )
         .expect("`get_config` failed");
 
-        assert_eq!(config.dockerfile, "from-closer-ancestor");
+        assert_eq!(config.dockerfile, format!("{cwd_str}/from-closer-ancestor"));
     }
 
     #[test]
@@ -463,6 +516,9 @@ mod configuration_sources_priority_order {
         env::set_current_dir(&cwd).expect("Failed to set current directory");
         let cli_args = default_cli_args(Command::Config);
 
+        let cwd_str = cwd
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
         let (_, config) = get_config(
             home_dir
                 .to_str()
@@ -471,7 +527,7 @@ mod configuration_sources_priority_order {
         )
         .expect("`get_config` failed");
 
-        assert_eq!(config.dockerfile, "from-home");
+        assert_eq!(config.dockerfile, format!("{cwd_str}/from-home"));
     }
 
     #[test]
@@ -493,6 +549,9 @@ mod configuration_sources_priority_order {
         env::set_current_dir(&cwd).expect("Failed to set current directory");
         let cli_args = default_cli_args(Command::Config);
 
+        let cwd_str = cwd
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
         let (_, config) = get_config(
             home_dir
                 .path()
@@ -502,7 +561,7 @@ mod configuration_sources_priority_order {
         )
         .expect("`get_config` failed");
 
-        assert_eq!(config.dockerfile, "from-cwd");
+        assert_eq!(config.dockerfile, format!("{cwd_str}/from-cwd"));
     }
 
     #[test]
@@ -520,6 +579,10 @@ mod configuration_sources_priority_order {
         env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = default_cli_args(Command::Config);
 
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
         let (_, config) = get_config(
             home_dir
                 .path()
@@ -529,7 +592,7 @@ mod configuration_sources_priority_order {
         )
         .expect("`get_config` failed");
 
-        assert_eq!(config.dockerfile, "from-cwd-local");
+        assert_eq!(config.dockerfile, format!("{cwd_str}/from-cwd-local"));
     }
 
     #[test]
@@ -548,6 +611,10 @@ mod configuration_sources_priority_order {
         };
         let cli_args = default_cli_args(Command::Config);
 
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
         let (_, config) = get_config(
             home_dir
                 .path()
@@ -557,7 +624,7 @@ mod configuration_sources_priority_order {
         )
         .expect("`get_config` failed");
 
-        assert_eq!(config.dockerfile, "from-env");
+        assert_eq!(config.dockerfile, format!("{cwd_str}/from-env"));
     }
 
     #[test]
@@ -574,6 +641,10 @@ mod configuration_sources_priority_order {
             .dockerfile("from-cli")
             .build();
 
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
         let (_, config) = get_config(
             home_dir
                 .path()
@@ -583,7 +654,7 @@ mod configuration_sources_priority_order {
         )
         .expect("`get_config` failed");
 
-        assert_eq!(config.dockerfile, "from-cli");
+        assert_eq!(config.dockerfile, format!("{cwd_str}/from-cli"));
     }
 
     #[test]
@@ -616,6 +687,10 @@ mod configuration_sources_priority_order {
             .dockerfile("from-cli")
             .build();
 
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
         let (_, config) = get_config(
             home_dir
                 .path()
@@ -625,7 +700,7 @@ mod configuration_sources_priority_order {
         )
         .expect("`get_config` failed");
 
-        assert_eq!(config.dockerfile, "from-cli");
+        assert_eq!(config.dockerfile, format!("{cwd_str}/from-cli"));
     }
 }
 
@@ -643,6 +718,10 @@ mod merging_cli_args {
         env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = default_cli_args(Command::Config);
 
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
         let (_, config) = get_config(
             home_dir
                 .path()
@@ -652,7 +731,7 @@ mod merging_cli_args {
         )
         .expect("`get_config` failed");
 
-        assert_eq!(config.dockerfile, "from-cwd");
+        assert_eq!(config.dockerfile, format!("{cwd_str}/from-cwd"));
     }
 
     #[test]
@@ -678,297 +757,5 @@ mod merging_cli_args {
         .expect("`get_config` failed");
 
         assert!(config.allow_stale);
-    }
-}
-
-mod default_values {
-    use super::*;
-
-    #[test]
-    fn default_dockerfile_is_agentcontainer_slash_dockerfile() {
-        let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cwd = tempdir().expect("Failed to create temporary directory");
-        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
-        let cli_args = default_cli_args(Command::Config);
-
-        let (_, config) = get_config(
-            home_dir
-                .path()
-                .to_str()
-                .expect("Temporary directory path is not valid UTF-8"),
-            &cli_args,
-        )
-        .expect("`get_config` failed");
-
-        assert_eq!(
-            config.dockerfile,
-            String::from(".agentcontainer/Dockerfile")
-        );
-    }
-
-    #[test]
-    fn default_build_context_is_dot() {
-        let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cwd = tempdir().expect("Failed to create temporary directory");
-        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
-        let cli_args = default_cli_args(Command::Config);
-
-        let (_, config) = get_config(
-            home_dir
-                .path()
-                .to_str()
-                .expect("Temporary directory path is not valid UTF-8"),
-            &cli_args,
-        )
-        .expect("`get_config` failed");
-
-        assert_eq!(config.build_context, ".");
-    }
-
-    #[test]
-    fn default_project_name_is_derived_from_cwd() {
-        let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cwd = tempdir().expect("Failed to create temporary directory");
-        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
-        let cli_args = default_cli_args(Command::Config);
-
-        let (_, config) = get_config(
-            home_dir
-                .path()
-                .to_str()
-                .expect("Temporary directory path is not valid UTF-8"),
-            &cli_args,
-        )
-        .expect("`get_config` failed");
-
-        // The temp directory name will be something like `tmp1a2b3c4d`. We just verify it's
-        // non-empty and matches the last component of the CWD.
-        let expected = cwd
-            .path()
-            .file_name()
-            .and_then(|name| name.to_str())
-            .expect("Temporary directory has no valid file name");
-        assert_eq!(config.project_name, expected);
-    }
-
-    #[test]
-    fn default_username_comes_from_whoami() {
-        let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cwd = tempdir().expect("Failed to create temporary directory");
-        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
-        let cli_args = default_cli_args(Command::Config);
-
-        let (_, config) = get_config(
-            home_dir
-                .path()
-                .to_str()
-                .expect("Temporary directory path is not valid UTF-8"),
-            &cli_args,
-        )
-        .expect("`get_config` failed");
-
-        assert_eq!(
-            config.username,
-            whoami::username().unwrap_or_else(|_| String::from("unknown"))
-        );
-    }
-
-    #[test]
-    fn default_target_is_none() {
-        let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cwd = tempdir().expect("Failed to create temporary directory");
-        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
-        let cli_args = default_cli_args(Command::Config);
-
-        let (_, config) = get_config(
-            home_dir
-                .path()
-                .to_str()
-                .expect("Temporary directory path is not valid UTF-8"),
-            &cli_args,
-        )
-        .expect("`get_config` failed");
-
-        assert!(config.target.is_none());
-    }
-
-    #[test]
-    fn default_allow_stale_is_false() {
-        let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cwd = tempdir().expect("Failed to create temporary directory");
-        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
-        let cli_args = default_cli_args(Command::Config);
-
-        let (_, config) = get_config(
-            home_dir
-                .path()
-                .to_str()
-                .expect("Temporary directory path is not valid UTF-8"),
-            &cli_args,
-        )
-        .expect("`get_config` failed");
-
-        assert!(!config.allow_stale);
-    }
-
-    #[test]
-    fn default_force_rebuild_is_false() {
-        let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cwd = tempdir().expect("Failed to create temporary directory");
-        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
-        let cli_args = default_cli_args(Command::Config);
-
-        let (_, config) = get_config(
-            home_dir
-                .path()
-                .to_str()
-                .expect("Temporary directory path is not valid UTF-8"),
-            &cli_args,
-        )
-        .expect("`get_config` failed");
-
-        assert!(!config.force_rebuild);
-    }
-
-    #[test]
-    fn default_no_build_cache_is_false() {
-        let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cwd = tempdir().expect("Failed to create temporary directory");
-        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
-        let cli_args = default_cli_args(Command::Config);
-
-        let (_, config) = get_config(
-            home_dir
-                .path()
-                .to_str()
-                .expect("Temporary directory path is not valid UTF-8"),
-            &cli_args,
-        )
-        .expect("`get_config` failed");
-
-        assert!(!config.no_build_cache);
-    }
-
-    #[test]
-    fn default_no_rebuild_is_false() {
-        let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cwd = tempdir().expect("Failed to create temporary directory");
-        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
-        let cli_args = default_cli_args(Command::Config);
-
-        let (_, config) = get_config(
-            home_dir
-                .path()
-                .to_str()
-                .expect("Temporary directory path is not valid UTF-8"),
-            &cli_args,
-        )
-        .expect("`get_config` failed");
-
-        assert!(!config.no_rebuild);
-    }
-}
-
-mod validation {
-    use super::*;
-
-    #[test]
-    fn username_not_slugifiable_is_an_error() {
-        let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cwd = tempdir().expect("Failed to create temporary directory");
-        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
-        let cli_args = CliArgsBuilder::new(Command::Config)
-            .project_name("myproject")
-            .username("@@@")
-            .build();
-
-        let error = get_config(
-            home_dir
-                .path()
-                .to_str()
-                .expect("Temporary directory path is not valid UTF-8"),
-            &cli_args,
-        )
-        .expect_err("Expected `get_config` to fail with an invalid username");
-
-        assert!(
-            matches!(error, ConfigError::InvalidUsername { .. }),
-            "Expected `ConfigError::InvalidUsername`, got: {error:?}"
-        );
-    }
-
-    #[test]
-    fn project_name_not_slugifiable_is_an_error() {
-        let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cwd = tempdir().expect("Failed to create temporary directory");
-        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
-        let cli_args = CliArgsBuilder::new(Command::Config)
-            .project_name("@@@")
-            .username("alice")
-            .build();
-
-        let result = get_config(
-            home_dir
-                .path()
-                .to_str()
-                .expect("Temporary directory path is not valid UTF-8"),
-            &cli_args,
-        );
-
-        assert!(
-            matches!(result, Err(ConfigError::InvalidProjectName { .. })),
-            "Expected `InvalidProjectName` error, got: {result:?}"
-        );
-    }
-
-    #[test]
-    fn target_not_slugifiable_is_an_error() {
-        let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cwd = tempdir().expect("Failed to create temporary directory");
-        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
-        let cli_args = CliArgsBuilder::new(Command::Config)
-            .project_name("myproject")
-            .username("alice")
-            .target("@@@")
-            .build();
-
-        let error = get_config(
-            home_dir
-                .path()
-                .to_str()
-                .expect("Temporary directory path is not valid UTF-8"),
-            &cli_args,
-        )
-        .expect_err("Expected `get_config` to fail with an invalid target");
-
-        assert!(
-            matches!(error, ConfigError::InvalidTarget { .. }),
-            "Expected `ConfigError::InvalidTarget`, got: {error:?}"
-        );
-    }
-
-    #[test]
-    fn force_rebuild_and_no_rebuild_together_is_an_error() {
-        let home_dir = tempdir().expect("Failed to create temporary directory");
-        let cwd = tempdir().expect("Failed to create temporary directory");
-        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
-        let cli_args = CliArgsBuilder::new(Command::Build)
-            .force_rebuild()
-            .no_rebuild()
-            .build();
-
-        let error = get_config(
-            home_dir
-                .path()
-                .to_str()
-                .expect("Temporary directory path is not valid UTF-8"),
-            &cli_args,
-        )
-        .expect_err("Expected `get_config` to fail with conflicting rebuild flags");
-
-        assert!(
-            matches!(error, ConfigError::ConflictingRebuildFlags),
-            "Expected `ConfigError::ConflictingRebuildFlags`, got: {error:?}"
-        );
     }
 }
