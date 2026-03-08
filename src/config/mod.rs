@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{Formatter, Result as FmtResult};
 use std::{collections::HashMap, env};
 use thiserror::Error;
+use tracing::{debug, trace};
 
 /// Default path to the Dockerfile.
 fn default_dockerfile() -> String {
@@ -566,6 +567,8 @@ pub(crate) fn get_config<'cli_args>(
     // Parse CLI `--env` args into a map.
     let cli_env_vars = parse_cli_environment_variables(&cli_args.environment_variables)?;
 
+    debug!("Loading configuration from all sources");
+
     // Build the provider list in priority order (lowest to highest).
     let mut providers: Vec<Box<dyn figment::Provider>> = vec![
         Box::new(Toml::file(format!(
@@ -642,12 +645,15 @@ pub(crate) fn get_config<'cli_args>(
     );
 
     // Extract the configuration using our custom merging provider.
+    debug!("Extracting merged configuration");
     let mut config: Config =
         Figment::from(MergingProvider::new(providers, String::from(home_dir))).extract()?;
 
     expand_config_paths(&mut config, home_dir);
     validate_config(&config)?;
     clean_config(&mut config);
+
+    trace!(?config, "Final resolved configuration");
 
     Ok((&cli_args.command, config))
 }

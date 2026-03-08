@@ -13,7 +13,9 @@ use build::BuildOutcome;
 use clap::Parser as _;
 use config::{CliArgs, Command};
 use std::env;
-use std::io::{IsTerminal as _, stdin};
+use std::io::{IsTerminal as _, stderr, stdin};
+use tracing::{info, warn};
+use tracing_subscriber::EnvFilter;
 use utils::clock::SystemClock;
 use utils::docker::RealDockerBackend;
 use utils::fs::RealFilesystem;
@@ -24,6 +26,14 @@ use utils::git::RealGitContext;
     reason = "This is a CLI application that needs to print output to stdout."
 )]
 fn main() -> Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_env("AGENTCONTAINER_LOG_LEVEL")
+                .unwrap_or_else(|_| EnvFilter::new("info")),
+        )
+        .with_writer(stderr)
+        .init();
+
     let home_dir = env::var("HOME").context("HOME environment variable is not set")?;
     let cli_args = CliArgs::parse();
 
@@ -56,6 +66,8 @@ fn main() -> Result<()> {
 
             let pre_run_extra_args = hooks::execute_pre_run_hook(config.pre_run.as_deref())?;
 
+            info!("Running agent container");
+
             match run::run(
                 &config,
                 &RealDockerBackend,
@@ -78,12 +90,10 @@ fn main() -> Result<()> {
 }
 
 /// Build the image and report the outcome to stderr.
-#[expect(
-    clippy::print_stderr,
-    reason = "This is a CLI application that needs to print status to stderr."
-)]
 fn handle_build(config: &config::Config) -> Result<()> {
     let pre_build_extra_args = hooks::execute_pre_build_hook(config.pre_build.as_deref())?;
+
+    info!("Building agent container");
 
     match build::build(
         config,
@@ -93,15 +103,16 @@ fn handle_build(config: &config::Config) -> Result<()> {
         &pre_build_extra_args,
     ) {
         Ok(BuildOutcome::SkippedNoRebuild) => {
-            eprintln!("Skipping rebuild (--no-rebuild)");
+            info!("Skipping rebuild (--no-rebuild)");
         }
         Ok(BuildOutcome::UpToDate) => {
-            eprintln!("Image is up to date, skipping build");
+            info!("Image is up to date, skipping build");
         }
-        Ok(BuildOutcome::Built) => {}
+        Ok(BuildOutcome::Built) => {
+            info!("Image built");
+        }
         Ok(BuildOutcome::UsingStaleAfterFailure { build_error }) => {
-            eprintln!("Warning: build failed: {build_error}");
-            eprintln!("Build failed but `--allow-stale` is set; using existing image");
+            warn!(%build_error, "Build failed but `--allow-stale` is set; using existing image");
         }
         Err(error) => {
             return Err(error.into());

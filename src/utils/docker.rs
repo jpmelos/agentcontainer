@@ -8,6 +8,7 @@ use std::io::Error as IoError;
 use std::os::unix::process::CommandExt as _;
 use std::process::{Command, ExitStatus, Stdio};
 use thiserror::Error;
+use tracing::debug;
 
 /// An error produced by the `docker build` invocation.
 #[derive(Debug, Error)]
@@ -57,6 +58,8 @@ impl DockerBackend for RealDockerBackend {
         &self,
         image_name: &str,
     ) -> Result<Option<DateTime<Utc>>, anyhow::Error> {
+        debug!(%image_name, "Running `docker image inspect`");
+
         let output = Command::new("docker")
             .args(["image", "inspect", image_name, "--format", "{{.Created}}"])
             .stdout(Stdio::piped())
@@ -66,6 +69,7 @@ impl DockerBackend for RealDockerBackend {
 
         if !output.status.success() {
             // A non-zero exit status means the image does not exist.
+            debug!(%image_name, "Image does not exist locally");
             return Ok(None);
         }
 
@@ -76,6 +80,7 @@ impl DockerBackend for RealDockerBackend {
             .parse::<DateTime<Utc>>()
             .context("Failed to parse image creation timestamp as RFC 3339")?;
 
+        debug!(%image_name, %image_created, "Image found locally");
         Ok(Some(image_created))
     }
 
@@ -123,16 +128,21 @@ impl DockerBackend for RealDockerBackend {
         command.stdout(Stdio::inherit());
         command.stderr(Stdio::inherit());
 
+        debug!(?command, "Running `docker build`");
+
         let status = command.status().map_err(DockerBuildError::SpawnFailed)?;
 
         if status.success() {
+            debug!(%image_name, "Image built successfully");
             Ok(())
         } else {
+            debug!(%image_name, %status, "`docker build` failed");
             Err(DockerBuildError::NonZeroExit(status))
         }
     }
 
     fn exec_docker_run(&self, args: &[String]) -> Result<Infallible, IoError> {
+        debug!(?args, "Executing `docker run`");
         let error = Command::new("docker").args(args).exec();
         Err(error)
     }

@@ -7,6 +7,7 @@ use std::convert::Infallible;
 use std::io::Error as IoError;
 use std::path::Path;
 use thiserror::Error;
+use tracing::debug;
 
 /// Errors that can be returned from `run`.
 #[derive(Debug, Error)]
@@ -56,6 +57,11 @@ pub(crate) fn run(
         stdin_is_terminal,
         pre_run_extra_args,
     );
+
+    debug!(?args, "Assembled `docker run` arguments");
+
+    let image_name = config.get_image_name();
+    debug!(%image_name, "Running container");
 
     docker_backend
         .exec_docker_run(&args)

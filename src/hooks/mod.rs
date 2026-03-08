@@ -4,6 +4,7 @@ use anyhow::{Context as _, Result, bail};
 use serde::Deserialize;
 use std::process::Command;
 use toml::de::Error as TomlError;
+use tracing::debug;
 
 /// Execute the pre-build hook if configured and return extra `docker build` arguments.
 ///
@@ -31,6 +32,8 @@ fn execute_hook(hook_path: Option<&str>, hook_label: &str) -> Result<Vec<String>
         return Ok(Vec::new());
     };
 
+    debug!(hook_label, path, "Executing hook");
+
     let output = Command::new(path)
         .output()
         .with_context(|| format!("Failed to execute {hook_label} hook {path:?}"))?;
@@ -46,11 +49,15 @@ fn execute_hook(hook_path: Option<&str>, hook_label: &str) -> Result<Vec<String>
     let stdout_text = String::from_utf8(output.stdout)
         .with_context(|| format!("{hook_label} hook stdout is not valid UTF-8"))?;
 
-    parse_hook_output(&stdout_text).with_context(|| {
+    let args = parse_hook_output(&stdout_text).with_context(|| {
         format!(
             "Failed to parse {hook_label} hook output as a TOML list of strings: {stdout_text:?}"
         )
-    })
+    })?;
+
+    debug!(hook_label, ?args, "Hook produced extra arguments");
+
+    Ok(args)
 }
 
 /// Parse the raw stdout of a hook into a list of extra arguments.

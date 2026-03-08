@@ -3,6 +3,7 @@
 use anyhow::Context as _;
 use chrono::{DateTime, Utc};
 use std::fs;
+use tracing::debug;
 
 /// Abstraction over the filesystem operations required by the build process.
 pub(crate) trait Filesystem {
@@ -16,11 +17,14 @@ pub(crate) struct RealFilesystem;
 
 impl Filesystem for RealFilesystem {
     fn file_mtime(&self, path: &str) -> Result<DateTime<Utc>, anyhow::Error> {
+        debug!(path, "Reading file modification time");
         let metadata =
             fs::metadata(path).with_context(|| format!("Failed to read metadata for `{path}`"))?;
         let mtime = metadata
             .modified()
             .context("Failed to get modification time of file")?;
-        Ok(mtime.into())
+        let mtime: DateTime<Utc> = mtime.into();
+        debug!(path, %mtime, "File modification time retrieved");
+        Ok(mtime)
     }
 }

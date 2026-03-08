@@ -4,6 +4,7 @@ use anyhow::Context as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use tracing::debug;
 
 /// Abstraction over Git operations.
 pub(crate) trait GitContext {
@@ -21,18 +22,23 @@ pub(crate) struct RealGitContext;
 
 impl GitContext for RealGitContext {
     fn main_worktree_root(&self, current_dir: &Path) -> Result<Option<PathBuf>, anyhow::Error> {
+        debug!(?current_dir, "Detecting Git worktree");
+
         let git_path = current_dir.join(".git");
 
         let Ok(metadata) = fs::symlink_metadata(&git_path) else {
+            debug!("No .git found, not a Git repository");
             return Ok(None);
         };
 
         // If `.git` is a directory, this is a normal repository, not a linked worktree.
         if metadata.is_dir() {
+            debug!(".git is a directory, not a linked worktree");
             return Ok(None);
         }
 
         // `.git` is a file, indicating a linked worktree. Find the main worktree.
+        debug!(".git is a file, detecting linked worktree");
         let output = Command::new("git")
             .args(["worktree", "list", "--porcelain"])
             .current_dir(current_dir)
@@ -51,8 +57,10 @@ impl GitContext for RealGitContext {
             if let Some(path_str) = line.strip_prefix("worktree ") {
                 let main_worktree = PathBuf::from(path_str);
                 if main_worktree != current_dir {
+                    debug!(?main_worktree, "Found main worktree root");
                     return Ok(Some(main_worktree));
                 }
+                debug!("Current directory is the main worktree");
                 return Ok(None);
             }
         }
