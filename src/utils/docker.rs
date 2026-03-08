@@ -23,12 +23,12 @@ pub(crate) enum DockerBuildError {
 
 /// Abstraction over the Docker CLI operations required by the build process.
 pub(crate) trait DockerBackend {
-    /// Fetch the creation timestamp of a Docker image, if it exists locally.
+    /// Fetch the last tag timestamp of a Docker image, if it exists locally.
     ///
     /// Returns `Some(timestamp)` if the image exists, or `None` if it does not. Returns an error
     /// if the `docker image inspect` command fails for a reason other than the image not existing,
     /// or if the timestamp cannot be parsed.
-    fn fetch_image_creation_timestamp(
+    fn fetch_image_last_tag_timestamp(
         &self,
         image_name: &str,
     ) -> Result<Option<DateTime<Utc>>, anyhow::Error>;
@@ -54,14 +54,20 @@ pub(crate) trait DockerBackend {
 pub(crate) struct RealDockerBackend;
 
 impl DockerBackend for RealDockerBackend {
-    fn fetch_image_creation_timestamp(
+    fn fetch_image_last_tag_timestamp(
         &self,
         image_name: &str,
     ) -> Result<Option<DateTime<Utc>>, anyhow::Error> {
         debug!(%image_name, "Running `docker image inspect`");
 
         let output = Command::new("docker")
-            .args(["image", "inspect", image_name, "--format", "{{.Created}}"])
+            .args([
+                "image",
+                "inspect",
+                image_name,
+                "--format",
+                "{{.Metadata.LastTagTime.Format \"2006-01-02T15:04:05Z07:00\"}}",
+            ])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
@@ -76,12 +82,12 @@ impl DockerBackend for RealDockerBackend {
         let timestamp_str = String::from_utf8(output.stdout)
             .context("`docker image inspect` output is not valid UTF-8")?;
         let timestamp_str = timestamp_str.trim();
-        let image_created: DateTime<Utc> = timestamp_str
+        let image_last_tagged: DateTime<Utc> = timestamp_str
             .parse::<DateTime<Utc>>()
-            .context("Failed to parse image creation timestamp as RFC 3339")?;
+            .context("Failed to parse image last tag timestamp as RFC 3339")?;
 
-        debug!(%image_name, %image_created, "Image found locally");
-        Ok(Some(image_created))
+        debug!(%image_name, %image_last_tagged, "Image found locally");
+        Ok(Some(image_last_tagged))
     }
 
     fn run_docker_build(

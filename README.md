@@ -325,8 +325,8 @@ The build is skipped if the image is already up to date. A rebuild is triggered
 when any of the following is true:
 
 - No image exists yet.
-- The Dockerfile was modified after the image was created.
-- The image was created before the start of today (local time).
+- The Dockerfile was modified after the image was last tagged.
+- The image was last tagged before the start of today (local time).
 - `force_rebuild` is set.
 
 ### `run`

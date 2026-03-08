@@ -92,8 +92,8 @@ fn make_non_zero_exit_error() -> DockerBuildError {
 
 /// Configurable mock for `DockerBackend`.
 struct MockDocker {
-    /// Value returned by `fetch_image_creation_timestamp`.
-    existing_image_created: Result<Option<DateTime<Utc>>, anyhow::Error>,
+    /// Value returned by `fetch_image_last_tag_timestamp`.
+    existing_image_last_tagged: Result<Option<DateTime<Utc>>, anyhow::Error>,
     /// Value returned by `run_docker_build`.
     build_result: Result<(), DockerBuildError>,
     /// Captures the `pre_build_extra_args` passed to `run_docker_build`.
@@ -104,7 +104,7 @@ impl MockDocker {
     /// The image does not exist and `docker build` succeeds.
     fn no_image_build_succeeds() -> Self {
         Self {
-            existing_image_created: Ok(None),
+            existing_image_last_tagged: Ok(None),
             build_result: Ok(()),
             received_pre_build_args: RefCell::new(Vec::new()),
         }
@@ -113,34 +113,34 @@ impl MockDocker {
     /// The image does not exist and `docker build` fails with a non-zero exit status.
     fn no_image_build_fails() -> Self {
         Self {
-            existing_image_created: Ok(None),
+            existing_image_last_tagged: Ok(None),
             build_result: Err(make_non_zero_exit_error()),
             received_pre_build_args: RefCell::new(Vec::new()),
         }
     }
 
-    /// The image exists (created at the given time) and `docker build` succeeds.
-    fn image_exists_build_succeeds(created: DateTime<Utc>) -> Self {
+    /// The image exists (last tagged at the given time) and `docker build` succeeds.
+    fn image_exists_build_succeeds(last_tagged: DateTime<Utc>) -> Self {
         Self {
-            existing_image_created: Ok(Some(created)),
+            existing_image_last_tagged: Ok(Some(last_tagged)),
             build_result: Ok(()),
             received_pre_build_args: RefCell::new(Vec::new()),
         }
     }
 
-    /// The image exists (created at the given time) and `docker build` fails.
-    fn image_exists_build_fails(created: DateTime<Utc>) -> Self {
+    /// The image exists (last tagged at the given time) and `docker build` fails.
+    fn image_exists_build_fails(last_tagged: DateTime<Utc>) -> Self {
         Self {
-            existing_image_created: Ok(Some(created)),
+            existing_image_last_tagged: Ok(Some(last_tagged)),
             build_result: Err(make_non_zero_exit_error()),
             received_pre_build_args: RefCell::new(Vec::new()),
         }
     }
 
-    /// `fetch_image_creation_timestamp` itself returns an error.
-    fn fetch_image_creation_timestamp_fails() -> Self {
+    /// `fetch_image_last_tag_timestamp` itself returns an error.
+    fn fetch_image_last_tag_timestamp_fails() -> Self {
         Self {
-            existing_image_created: Err(anyhow!("docker inspect failed")),
+            existing_image_last_tagged: Err(anyhow!("docker inspect failed")),
             build_result: Ok(()),
             received_pre_build_args: RefCell::new(Vec::new()),
         }
@@ -148,11 +148,11 @@ impl MockDocker {
 }
 
 impl DockerBackend for MockDocker {
-    fn fetch_image_creation_timestamp(
+    fn fetch_image_last_tag_timestamp(
         &self,
         _image_name: &str,
     ) -> Result<Option<DateTime<Utc>>, anyhow::Error> {
-        match self.existing_image_created.as_ref() {
+        match self.existing_image_last_tagged.as_ref() {
             Ok(value) => Ok(*value),
             Err(error) => Err(anyhow!("{error}")),
         }
@@ -280,7 +280,7 @@ mod build {
     #[test]
     fn fetch_timestamp_failure_returns_staleness_check_error() {
         let config = make_config();
-        let docker = MockDocker::fetch_image_creation_timestamp_fails();
+        let docker = MockDocker::fetch_image_last_tag_timestamp_fails();
         let filesystem = MockFilesystem::with_mtime(long_ago_utc());
         let clock = MockClock::real_now();
 
@@ -295,7 +295,7 @@ mod build {
 
     #[test]
     fn force_rebuild_triggers_build_and_returns_built() {
-        // Image exists and would otherwise be considered up to date (created today, Dockerfile
+        // Image exists and would otherwise be considered up to date (last tagged today, Dockerfile
         // `mtime` is old), but `force_rebuild` must bypass the staleness check.
         let config = Config {
             force_rebuild: true,
@@ -316,7 +316,7 @@ mod build {
 
     #[test]
     fn up_to_date_image_returns_up_to_date() {
-        // Image created today, Dockerfile mtime is long before the image was built.
+        // Image last tagged today, Dockerfile mtime is long before the image was tagged.
         let config = make_config();
         let docker = MockDocker::image_exists_build_succeeds(today_noon_utc());
         let filesystem = MockFilesystem::with_mtime(long_ago_utc());
@@ -467,13 +467,13 @@ mod should_rebuild_fn {
 
     #[test]
     fn dockerfile_newer_than_image_triggers_rebuild() {
-        // Image was created at a fixed point in the past.
-        let image_created = long_ago_utc();
-        // Dockerfile was modified after the image was created.
-        let dockerfile_mtime = image_created + chrono::Duration::seconds(1);
+        // Image was last tagged at a fixed point in the past.
+        let image_last_tagged = long_ago_utc();
+        // Dockerfile was modified after the image was last tagged.
+        let dockerfile_mtime = image_last_tagged + chrono::Duration::seconds(1);
 
         let config = make_config();
-        let docker = MockDocker::image_exists_build_succeeds(image_created);
+        let docker = MockDocker::image_exists_build_succeeds(image_last_tagged);
         let filesystem = MockFilesystem::with_mtime(dockerfile_mtime);
         let clock = MockClock::real_now();
 
@@ -488,12 +488,12 @@ mod should_rebuild_fn {
 
     #[test]
     fn image_older_than_today_triggers_rebuild() {
-        // Image was created yesterday; Dockerfile `mtime` is long before the image.
-        let image_created = yesterday_noon_utc();
+        // Image was last tagged yesterday; Dockerfile `mtime` is long before the image.
+        let image_last_tagged = yesterday_noon_utc();
         let dockerfile_mtime = long_ago_utc();
 
         let config = make_config();
-        let docker = MockDocker::image_exists_build_succeeds(image_created);
+        let docker = MockDocker::image_exists_build_succeeds(image_last_tagged);
         let filesystem = MockFilesystem::with_mtime(dockerfile_mtime);
         let clock = MockClock::real_now();
 
@@ -507,13 +507,13 @@ mod should_rebuild_fn {
     }
 
     #[test]
-    fn image_created_today_with_old_dockerfile_is_up_to_date() {
-        // Image was created today; Dockerfile was last modified long before the image.
-        let image_created = today_noon_utc();
+    fn image_tagged_today_with_old_dockerfile_is_up_to_date() {
+        // Image was last tagged today; Dockerfile was last modified long before the image.
+        let image_last_tagged = today_noon_utc();
         let dockerfile_mtime = long_ago_utc();
 
         let config = make_config();
-        let docker = MockDocker::image_exists_build_succeeds(image_created);
+        let docker = MockDocker::image_exists_build_succeeds(image_last_tagged);
         let filesystem = MockFilesystem::with_mtime(dockerfile_mtime);
         let clock = MockClock::real_now();
 
@@ -522,7 +522,7 @@ mod should_rebuild_fn {
 
         assert!(
             matches!(outcome, BuildOutcome::UpToDate),
-            "Expected `UpToDate` when image was built today and Dockerfile is unchanged, \
+            "Expected `UpToDate` when image was tagged today and Dockerfile is unchanged, \
             got: {outcome:?}"
         );
     }

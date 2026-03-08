@@ -69,11 +69,14 @@ pub(crate) fn build(
     let image_name = config.get_image_name();
     debug!(%image_name, "Checking if image needs to be rebuilt");
 
-    let existing_image_created_at = docker
-        .fetch_image_creation_timestamp(&image_name)
+    let existing_image_last_tagged_at = docker
+        .fetch_image_last_tag_timestamp(&image_name)
         .map_err(BuildError::StalenessCheck)?;
-    let image_exists = existing_image_created_at.is_some();
-    debug!(?existing_image_created_at, "Image existence check complete");
+    let image_exists = existing_image_last_tagged_at.is_some();
+    debug!(
+        ?existing_image_last_tagged_at,
+        "Image existence check complete"
+    );
 
     if config.no_rebuild {
         if !image_exists {
@@ -85,7 +88,7 @@ pub(crate) fn build(
     }
 
     let needs_rebuild = config.force_rebuild
-        || should_rebuild(config, existing_image_created_at, filesystem, clock)
+        || should_rebuild(config, existing_image_last_tagged_at, filesystem, clock)
             .map_err(BuildError::StalenessCheck)?;
     if !needs_rebuild {
         debug!("Image is up to date, no rebuild needed");
@@ -126,16 +129,16 @@ pub(crate) fn build(
 /// Determine whether the image needs to be rebuilt.
 ///
 /// Returns `true` if:
-/// - The image does not exist (`existing_image_created_at` is `None`).
-/// - The Dockerfile was modified after the image was created.
-/// - The image was created before the start of today (local time).
+/// - The image does not exist (`existing_image_last_tagged_at` is `None`).
+/// - The Dockerfile was modified after the image was last tagged.
+/// - The image was last tagged before the start of today (local time).
 fn should_rebuild(
     config: &Config,
-    existing_image_created_at: Option<DateTime<Utc>>,
+    existing_image_last_tagged_at: Option<DateTime<Utc>>,
     filesystem: &impl Filesystem,
     clock: &impl Clock,
 ) -> Result<bool, anyhow::Error> {
-    let Some(image_created_at) = existing_image_created_at else {
+    let Some(image_last_tagged_at) = existing_image_last_tagged_at else {
         debug!("No existing image found, rebuild needed");
         return Ok(true);
     };
@@ -144,31 +147,31 @@ fn should_rebuild(
     let dockerfile_mtime = filesystem.file_mtime(&config.dockerfile)?;
     debug!(
         ?dockerfile_mtime,
-        ?image_created_at,
-        "Comparing Dockerfile mtime to image creation time"
+        ?image_last_tagged_at,
+        "Comparing Dockerfile mtime to image last tag time"
     );
 
-    if dockerfile_mtime > image_created_at {
-        debug!("Dockerfile modified after image was created, rebuild needed");
+    if dockerfile_mtime > image_last_tagged_at {
+        debug!("Dockerfile modified after image was last tagged, rebuild needed");
         return Ok(true);
     }
 
-    // Check if the image was created before the start of today (local time).
+    // Check if the image was last tagged before the start of today (local time).
     let now_local = clock.now();
     let today_local = now_local.date_naive();
-    let image_created_at_local = image_created_at
+    let image_last_tagged_at_local = image_last_tagged_at
         .with_timezone(now_local.offset())
         .date_naive();
     debug!(
-        ?image_created_at_local,
+        ?image_last_tagged_at_local,
         ?today_local,
-        "Comparing image creation time to current time"
+        "Comparing image last tag time to current time"
     );
-    if image_created_at_local < today_local {
+    if image_last_tagged_at_local < today_local {
         debug!(
-            %image_created_at_local,
+            %image_last_tagged_at_local,
             %today_local,
-            "Image was created before today, rebuild needed",
+            "Image was last tagged before today, rebuild needed",
         );
         return Ok(true);
     }
