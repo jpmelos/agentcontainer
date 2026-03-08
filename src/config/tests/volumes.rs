@@ -167,14 +167,14 @@ mod parsing_toml {
     }
 
     #[test]
-    fn toml_host_container_with_relative_host_path_is_accepted() {
+    fn toml_docker_volume_name_is_accepted_and_unchanged() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
             r#"
             [volumes]
-            "/container" = "relative-host"
+            "/container" = "my-volume"
             "#,
         );
         env::set_current_dir(cwd.path()).expect("Failed to set current directory");
@@ -187,11 +187,11 @@ mod parsing_toml {
                 .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect("`get_config` should accept a relative host path");
+        .expect("`get_config` should accept a Docker volume name");
 
         assert!(matches!(
             config.volumes.get("/container"),
-            Some(VolumeEntry::Active(host)) if host == "relative-host"
+            Some(VolumeEntry::Active(host)) if host == "my-volume"
         ));
     }
 }
@@ -310,12 +310,12 @@ mod parsing_cli_args {
     }
 
     #[test]
-    fn cli_host_container_with_relative_host_path_is_accepted() {
+    fn cli_docker_volume_name_is_accepted_and_unchanged() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cwd = tempdir().expect("Failed to create temporary directory");
         env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = CliArgsBuilder::new(Command::Config)
-            .volumes(&["relative-host:/container"])
+            .volumes(&["my-volume:/container"])
             .build();
 
         let (_, config) = get_config(
@@ -325,11 +325,11 @@ mod parsing_cli_args {
                 .expect("Temporary directory path is not valid UTF-8"),
             &cli_args,
         )
-        .expect("`get_config` should accept a relative host path");
+        .expect("`get_config` should accept a Docker volume name");
 
         assert!(matches!(
             config.volumes.get("/container"),
-            Some(VolumeEntry::Active(host)) if host == "relative-host"
+            Some(VolumeEntry::Active(host)) if host == "my-volume"
         ));
     }
 }

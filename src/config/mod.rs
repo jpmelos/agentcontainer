@@ -3,7 +3,9 @@
 
 mod merging_provider;
 
-use crate::utils::paths::expand_tilde;
+use crate::utils::paths::{
+    expand_and_resolve_path, has_tilde_user_prefix, is_relative_filesystem_path,
+};
 use crate::utils::slugify::slugify;
 use clap::{Parser, Subcommand};
 use figment::{
@@ -14,9 +16,10 @@ use merging_provider::MergingProvider;
 use serde::de::{Error as DeError, Visitor};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Formatter, Result as FmtResult};
+use std::io::Error as IoError;
 use std::{collections::HashMap, env};
-use thiserror::Error;
-use tracing::{debug, trace};
+use thiserror::Error as ThisError;
+use tracing::{debug, trace, warn};
 
 /// Default path to the Dockerfile.
 fn default_dockerfile() -> String {
@@ -429,11 +432,14 @@ pub(crate) enum Command {
 }
 
 /// Errors that can be returned from `get_config`.
-#[derive(Debug, Error)]
+#[derive(Debug, ThisError)]
 pub(crate) enum ConfigError {
-    /// Figment failed to extract the configuration.
-    #[error("Failed to load configuration: {0}")]
-    Extract(Box<figment::Error>),
+    /// The current working directory could not be determined.
+    #[error("Failed to determine the current working directory: {0}")]
+    CurrentWorkingDirectoryUnavailable(IoError),
+    /// The current working directory is not valid UTF-8.
+    #[error("The current working directory is not valid UTF-8")]
+    CurrentWorkingDirectoryNotUtf8,
     /// A build argument CLI argument could not be parsed.
     #[error("Invalid build argument value {value:?}: expected \"KEY=value\" or \"!KEY\"")]
     InvalidBuildArgument {
@@ -449,17 +455,17 @@ pub(crate) enum ConfigError {
         /// The key that failed validation.
         key: String,
     },
-    /// The username contains no alphanumeric characters and cannot produce a valid slug.
-    #[error("Invalid `username` value {username:?}: contains no alphanumeric characters")]
-    InvalidUsername {
-        /// The raw username that failed slugification.
-        username: String,
-    },
     /// The project name contains no alphanumeric characters and cannot produce a valid slug.
     #[error("Invalid `project_name` value {project_name:?}: contains no alphanumeric characters")]
     InvalidProjectName {
         /// The raw project name that failed slugification.
         project_name: String,
+    },
+    /// The username contains no alphanumeric characters and cannot produce a valid slug.
+    #[error("Invalid `username` value {username:?}: contains no alphanumeric characters")]
+    InvalidUsername {
+        /// The raw username that failed slugification.
+        username: String,
     },
     /// The `target` value contains no alphanumeric characters and cannot be slugified.
     #[error("Invalid `target` value {target:?}: contains no alphanumeric characters")]
@@ -503,6 +509,9 @@ pub(crate) enum ConfigError {
         /// The key that failed validation.
         key: String,
     },
+    /// Figment failed to extract the configuration.
+    #[error("Failed to load configuration: {0}")]
+    Extract(Box<figment::Error>),
 }
 
 impl From<figment::Error> for ConfigError {
@@ -579,23 +588,24 @@ pub(crate) fn get_config<'cli_args>(
         ))),
     ];
 
-    // Ancestor directory configs: traverse from `/` towards CWD (exclusive), each providing
-    // `.agentcontainer/config.toml`. Closer to `/` has lower priority. When the home directory
-    // is an ancestor of CWD it appears in this traversal at higher priority than the explicit
-    // home entry above, which is the desired behavior.
-    if let Ok(cwd) = env::current_dir() {
-        // `ancestors()` yields CWD, parent, grandparent, …, `/`. Skip CWD itself (already
-        // covered by the relative `.agentcontainer/config.toml` entry below) and reverse so
-        // that `/` comes first (lowest priority).
-        let mut ancestor_configs: Vec<_> = cwd
-            .ancestors()
-            .skip(1)
-            .map(|ancestor| ancestor.join(".agentcontainer/config.toml"))
-            .collect();
-        ancestor_configs.reverse();
-        for config_path in ancestor_configs {
-            providers.push(Box::new(Toml::file(config_path)));
-        }
+    // Get the current working directory once for ancestor config loading and path expansion.
+    let cwd = env::current_dir().map_err(ConfigError::CurrentWorkingDirectoryUnavailable)?;
+
+    // Ancestor directory configs: traverse from `/` towards the current working directory
+    // (exclusive), each providing `.agentcontainer/config.toml`. Closer to `/` has lower priority.
+    // When the home directory is an ancestor of current working directory it appears in this
+    // traversal at higher priority than the explicit home entry above, which is the desired
+    // behavior. Skip the current working directory itself (already covered by the relative
+    // `.agentcontainer/config.toml` entry below) and reverse so that `/` comes first (lowest
+    // priority).
+    let mut ancestor_configs: Vec<_> = cwd
+        .ancestors()
+        .skip(1)
+        .map(|ancestor| ancestor.join(".agentcontainer/config.toml"))
+        .collect();
+    ancestor_configs.reverse();
+    for config_path in ancestor_configs {
+        providers.push(Box::new(Toml::file(config_path)));
     }
 
     providers.push(Box::new(Toml::file(".agentcontainer/config.toml")));
@@ -649,7 +659,10 @@ pub(crate) fn get_config<'cli_args>(
     let mut config: Config =
         Figment::from(MergingProvider::new(providers, String::from(home_dir))).extract()?;
 
-    expand_config_paths(&mut config, home_dir);
+    let cwd_str = cwd
+        .to_str()
+        .ok_or(ConfigError::CurrentWorkingDirectoryNotUtf8)?;
+    expand_config_paths(&mut config, home_dir, cwd_str);
     validate_config(&config)?;
     clean_config(&mut config);
 
@@ -783,17 +796,57 @@ fn is_valid_env_var_key(key: &str) -> bool {
         && key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
 }
 
-/// Expand leading `~` to `home_dir` in config path fields.
+/// Expand leading `~` to `home_dir` and resolve relative paths to absolute using the current
+/// working directory.
 ///
-/// This mirrors the tilde expansion applied to volume paths during merging, so that
-/// `pre_build = "~/hooks/build.sh"` and `pre_run = "~/hooks/run.sh"` resolve to absolute paths
-/// under the user's home directory.
-fn expand_config_paths(config: &mut Config, home_dir: &str) {
-    if let Some(ref mut path) = config.pre_build {
-        *path = expand_tilde(path, home_dir);
+/// For `pre_build` and `pre_run`: tildes are expanded, and relative paths are resolved relative to
+/// the current working directory.
+///
+/// For volume host paths: relative paths that look like filesystem paths (start with `.` or
+/// contain `/`) are resolved relative to the current working directory. Paths that do not start
+/// with `.` and do not contain `/` are treated as Docker volume names and left unchanged.
+fn expand_config_paths(config: &mut Config, home_dir: &str, cwd: &str) {
+    if let Some(ref mut pre_build_path) = config.pre_build
+        && !pre_build_path.is_empty()
+    {
+        if has_tilde_user_prefix(pre_build_path) {
+            warn!(
+                path = %pre_build_path,
+                "The `~user` syntax is not supported in `pre_build`; \
+                 treating as a relative path."
+            );
+        }
+        *pre_build_path = expand_and_resolve_path(pre_build_path, home_dir, cwd);
     }
-    if let Some(ref mut path) = config.pre_run {
-        *path = expand_tilde(path, home_dir);
+
+    for (container_path, entry) in &mut config.volumes {
+        if let VolumeEntry::Active(ref mut host_path) = *entry
+            && !host_path.starts_with('/')
+            && is_relative_filesystem_path(host_path)
+        {
+            if has_tilde_user_prefix(host_path) {
+                warn!(
+                    volume = %container_path,
+                    path = %host_path,
+                    "The `~user` syntax is not supported in volume host paths; \
+                     treating as a relative path."
+                );
+            }
+            *host_path = expand_and_resolve_path(host_path, home_dir, cwd);
+        }
+    }
+
+    if let Some(ref mut pre_run_path) = config.pre_run
+        && !pre_run_path.is_empty()
+    {
+        if has_tilde_user_prefix(pre_run_path) {
+            warn!(
+                path = %pre_run_path,
+                "The `~user` syntax is not supported in `pre_run`; \
+                 treating as a relative path."
+            );
+        }
+        *pre_run_path = expand_and_resolve_path(pre_run_path, home_dir, cwd);
     }
 }
 
@@ -805,15 +858,15 @@ fn validate_config(config: &Config) -> Result<(), ConfigError> {
         }
     }
 
-    if slugify(&config.username).is_empty() {
-        return Err(ConfigError::InvalidUsername {
-            username: config.username.clone(),
-        });
-    }
-
     if slugify(&config.project_name).is_empty() {
         return Err(ConfigError::InvalidProjectName {
             project_name: config.project_name.clone(),
+        });
+    }
+
+    if slugify(&config.username).is_empty() {
+        return Err(ConfigError::InvalidUsername {
+            username: config.username.clone(),
         });
     }
 

@@ -93,7 +93,7 @@ mod pre_build {
     }
 
     #[test]
-    fn tilde_user_syntax_in_pre_build_is_not_expanded() {
+    fn tilde_user_syntax_in_pre_build_is_not_tilde_expanded_but_resolved_to_cwd() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
@@ -103,6 +103,10 @@ mod pre_build {
         env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = default_cli_args(Command::Config);
 
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
         let (_, config) = get_config(
             home_dir
                 .path()
@@ -112,7 +116,98 @@ mod pre_build {
         )
         .expect("`get_config` failed");
 
-        assert_eq!(config.pre_build.as_deref(), Some("~alice/hooks/build.sh"),);
+        assert_eq!(
+            config.pre_build.as_deref(),
+            Some(format!("{cwd_str}/~alice/hooks/build.sh").as_str()),
+        );
+    }
+
+    #[test]
+    fn relative_path_in_toml_pre_build_is_resolved_to_cwd() {
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        write_file(
+            &cwd.path().join(".agentcontainer/config.toml"),
+            r#"pre_build = "scripts/build.sh""#,
+        );
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
+        let cli_args = default_cli_args(Command::Config);
+
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
+        let (_, config) = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8"),
+            &cli_args,
+        )
+        .expect("`get_config` failed");
+
+        assert_eq!(
+            config.pre_build.as_deref(),
+            Some(format!("{cwd_str}/scripts/build.sh").as_str()),
+        );
+    }
+
+    #[test]
+    fn dot_slash_relative_path_in_toml_pre_build_is_resolved_to_cwd() {
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        write_file(
+            &cwd.path().join(".agentcontainer/config.toml"),
+            r#"pre_build = "./scripts/build.sh""#,
+        );
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
+        let cli_args = default_cli_args(Command::Config);
+
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
+        let (_, config) = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8"),
+            &cli_args,
+        )
+        .expect("`get_config` failed");
+
+        assert_eq!(
+            config.pre_build.as_deref(),
+            Some(format!("{cwd_str}/scripts/build.sh").as_str()),
+        );
+    }
+
+    #[test]
+    fn relative_path_in_cli_pre_build_is_resolved_to_cwd() {
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .pre_build("scripts/build.sh")
+            .build();
+
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
+        let (_, config) = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8"),
+            &cli_args,
+        )
+        .expect("`get_config` failed");
+
+        assert_eq!(
+            config.pre_build.as_deref(),
+            Some(format!("{cwd_str}/scripts/build.sh").as_str()),
+        );
     }
 }
 
@@ -395,15 +490,129 @@ mod volumes {
     }
 
     #[test]
-    fn tilde_user_syntax_is_not_expanded() {
+    fn tilde_user_syntax_is_not_tilde_expanded_but_resolved_to_cwd() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
             &cwd.path().join(".agentcontainer/config.toml"),
             r#"
-        [volumes]
-        "/container" = "~alice/data"
-        "#,
+            [volumes]
+            "/container" = "~alice/data"
+            "#,
+        );
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
+        let cli_args = default_cli_args(Command::Config);
+
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
+        let (_, config) = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8"),
+            &cli_args,
+        )
+        .expect("`get_config` failed");
+
+        let expected_host = format!("{cwd_str}/~alice/data");
+        assert!(
+            matches!(
+                config.volumes.get("/container"),
+                Some(VolumeEntry::Active(host)) if host == &expected_host
+            ),
+            "Expected host path {expected_host:?}, got: {:?}",
+            config.volumes.get("/container")
+        );
+    }
+
+    #[test]
+    fn relative_host_path_starting_with_dot_is_expanded_to_cwd() {
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        write_file(
+            &cwd.path().join(".agentcontainer/config.toml"),
+            r#"
+            [volumes]
+            "/container" = "./data"
+            "#,
+        );
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
+        let cli_args = default_cli_args(Command::Config);
+
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
+        let (_, config) = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8"),
+            &cli_args,
+        )
+        .expect("`get_config` failed");
+
+        let expected_host = format!("{cwd_str}/data");
+        assert!(
+            matches!(
+                config.volumes.get("/container"),
+                Some(VolumeEntry::Active(host)) if host == &expected_host
+            ),
+            "Expected host path {expected_host:?}, got: {:?}",
+            config.volumes.get("/container")
+        );
+    }
+
+    #[test]
+    fn relative_host_path_containing_slash_is_expanded_to_cwd() {
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        write_file(
+            &cwd.path().join(".agentcontainer/config.toml"),
+            r#"
+            [volumes]
+            "/container" = "data/subdir"
+            "#,
+        );
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
+        let cli_args = default_cli_args(Command::Config);
+
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
+        let (_, config) = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8"),
+            &cli_args,
+        )
+        .expect("`get_config` failed");
+
+        let expected_host = format!("{cwd_str}/data/subdir");
+        assert!(
+            matches!(
+                config.volumes.get("/container"),
+                Some(VolumeEntry::Active(host)) if host == &expected_host
+            ),
+            "Expected host path {expected_host:?}, got: {:?}",
+            config.volumes.get("/container")
+        );
+    }
+
+    #[test]
+    fn docker_volume_name_is_not_expanded() {
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        write_file(
+            &cwd.path().join(".agentcontainer/config.toml"),
+            r#"
+            [volumes]
+            "/container" = "my_volume"
+            "#,
         );
         env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = default_cli_args(Command::Config);
@@ -417,10 +626,47 @@ mod volumes {
         )
         .expect("`get_config` failed");
 
-        assert!(matches!(
-            config.volumes.get("/container"),
-            Some(VolumeEntry::Active(host)) if host == "~alice/data"
-        ));
+        assert!(
+            matches!(
+                config.volumes.get("/container"),
+                Some(VolumeEntry::Active(host)) if host == "my_volume"
+            ),
+            "Expected Docker volume name to be unchanged, got: {:?}",
+            config.volumes.get("/container")
+        );
+    }
+
+    #[test]
+    fn relative_host_path_from_cli_starting_with_dot_is_expanded_to_cwd() {
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .volumes(&["./data:/container"])
+            .build();
+
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
+        let (_, config) = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8"),
+            &cli_args,
+        )
+        .expect("`get_config` failed");
+
+        let expected_host = format!("{cwd_str}/data");
+        assert!(
+            matches!(
+                config.volumes.get("/container"),
+                Some(VolumeEntry::Active(host)) if host == &expected_host
+            ),
+            "Expected host path {expected_host:?}, got: {:?}",
+            config.volumes.get("/container")
+        );
     }
 }
 
@@ -515,7 +761,7 @@ mod pre_run {
     }
 
     #[test]
-    fn tilde_user_syntax_in_pre_run_is_not_expanded() {
+    fn tilde_user_syntax_in_pre_run_is_not_tilde_expanded_but_resolved_to_cwd() {
         let home_dir = tempdir().expect("Failed to create temporary directory");
         let cwd = tempdir().expect("Failed to create temporary directory");
         write_file(
@@ -525,6 +771,10 @@ mod pre_run {
         env::set_current_dir(cwd.path()).expect("Failed to set current directory");
         let cli_args = default_cli_args(Command::Config);
 
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
         let (_, config) = get_config(
             home_dir
                 .path()
@@ -534,6 +784,97 @@ mod pre_run {
         )
         .expect("`get_config` failed");
 
-        assert_eq!(config.pre_run.as_deref(), Some("~alice/hooks/run.sh"),);
+        assert_eq!(
+            config.pre_run.as_deref(),
+            Some(format!("{cwd_str}/~alice/hooks/run.sh").as_str()),
+        );
+    }
+
+    #[test]
+    fn relative_path_in_toml_pre_run_is_resolved_to_cwd() {
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        write_file(
+            &cwd.path().join(".agentcontainer/config.toml"),
+            r#"pre_run = "scripts/run.sh""#,
+        );
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
+        let cli_args = default_cli_args(Command::Config);
+
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
+        let (_, config) = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8"),
+            &cli_args,
+        )
+        .expect("`get_config` failed");
+
+        assert_eq!(
+            config.pre_run.as_deref(),
+            Some(format!("{cwd_str}/scripts/run.sh").as_str()),
+        );
+    }
+
+    #[test]
+    fn dot_slash_relative_path_in_toml_pre_run_is_resolved_to_cwd() {
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        write_file(
+            &cwd.path().join(".agentcontainer/config.toml"),
+            r#"pre_run = "./scripts/run.sh""#,
+        );
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
+        let cli_args = default_cli_args(Command::Config);
+
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
+        let (_, config) = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8"),
+            &cli_args,
+        )
+        .expect("`get_config` failed");
+
+        assert_eq!(
+            config.pre_run.as_deref(),
+            Some(format!("{cwd_str}/scripts/run.sh").as_str()),
+        );
+    }
+
+    #[test]
+    fn relative_path_in_cli_pre_run_is_resolved_to_cwd() {
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
+        let cli_args = CliArgsBuilder::new(Command::Config)
+            .pre_run("scripts/run.sh")
+            .build();
+
+        let cwd_str = cwd
+            .path()
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
+        let (_, config) = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8"),
+            &cli_args,
+        )
+        .expect("`get_config` failed");
+
+        assert_eq!(
+            config.pre_run.as_deref(),
+            Some(format!("{cwd_str}/scripts/run.sh").as_str()),
+        );
     }
 }

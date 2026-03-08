@@ -137,11 +137,15 @@ EOF
 
 A leading `~` in the path is expanded to the user's home directory. Only `~`
 alone or `~/…` is expanded; `~user/…` and embedded tildes are left untouched.
+Relative paths are resolved against the current working directory. All paths
+are lexically normalized: `.` and `..` components are resolved and consecutive
+slashes are collapsed, without accessing the filesystem.
 
 In TOML configuration:
 
 ```toml
 pre_build = "~/hooks/pre-build.sh"
+pre_build = "scripts/pre-build.sh"   # resolved relative to the current working directory
 ```
 
 On the CLI:
@@ -166,11 +170,20 @@ user's home directory before config sources are merged. This means `~/.ssh` and
 priority resolution. Only `~` alone or `~/…` is expanded; `~user/…` and
 embedded tildes are left untouched.
 
+Relative host paths that look like filesystem paths (start with `.` or contain
+`/`) are resolved against the current working directory. Plain names without a
+`.` prefix or `/` (e.g. `my_volume`) are treated as Docker volume names and
+left unchanged. All resolved paths are lexically normalized: `.` and `..`
+components are resolved and consecutive slashes are collapsed, without
+accessing the filesystem.
+
 ```toml
 [volumes]
 "/workspace" = "~/projects/myproject"
 "/data" = "/mnt/shared-data"
+"/app" = "./src"                      # resolved relative to the current working directory
 "~/.ssh" = true                       # mount at the same path inside the container
+"/cache" = "my_cache_volume"          # Docker volume name, left unchanged
 "/unwanted" = false                   # suppress a volume defined in a lower-priority source
 ```
 
@@ -244,12 +257,16 @@ echo '["--network", "host"]'
 
 A leading `~` in the path is expanded to the user's home directory, just like
 for volume paths and `pre_build`. Only `~` alone or `~/…` is expanded;
-`~user/…` and embedded tildes are left untouched.
+`~user/…` and embedded tildes are left untouched. Relative paths are resolved
+against the current working directory. All paths are lexically normalized: `.`
+and `..` components are resolved and consecutive slashes are collapsed, without
+accessing the filesystem.
 
 In TOML configuration:
 
 ```toml
 pre_run = "~/hooks/pre-run.sh"
+pre_run = "scripts/pre-run.sh"   # resolved relative to the current working directory
 ```
 
 On the CLI:
