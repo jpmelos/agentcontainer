@@ -90,21 +90,21 @@ impl DockerBackend for RealDockerBackend {
         image_name: &str,
         pre_build_extra_args: &[String],
     ) -> Result<(), DockerBuildError> {
-        let mut command = Command::new("docker");
-        command.arg("build");
-        command.args(["-f", &config.dockerfile]);
+        let mut args: Vec<String> = vec!["build".into()];
+
+        args.extend(["-f".into(), config.dockerfile.clone()]);
 
         if let Some(ref target) = config.target {
-            command.args(["--target", target]);
+            args.extend(["--target".into(), target.clone()]);
         }
 
         for (key, entry) in &config.build_arguments {
             match *entry {
                 BuildArgumentEntry::Value(ref value) => {
-                    command.args(["--build-arg", &format!("{key}={value}")]);
+                    args.extend(["--build-arg".into(), format!("{key}={value}")]);
                 }
                 BuildArgumentEntry::Inherit => {
-                    command.args(["--build-arg", key]);
+                    args.extend(["--build-arg".into(), key.clone()]);
                 }
                 BuildArgumentEntry::Remove => {
                     unreachable!(
@@ -115,22 +115,24 @@ impl DockerBackend for RealDockerBackend {
         }
 
         if config.no_build_cache {
-            command.arg("--no-cache");
+            args.push("--no-cache".into());
         }
 
-        command.args(["-t", image_name]);
+        args.extend(["-t".into(), image_name.to_owned()]);
 
         // Extra arguments from the pre-build hook.
-        command.args(pre_build_extra_args);
+        args.extend(pre_build_extra_args.iter().cloned());
 
-        command.arg(&config.build_context);
+        args.push(config.build_context.clone());
 
-        command.stdout(Stdio::inherit());
-        command.stderr(Stdio::inherit());
+        debug!(?args, "Running `docker build`");
 
-        debug!(?command, "Running `docker build`");
-
-        let status = command.status().map_err(DockerBuildError::SpawnFailed)?;
+        let status = Command::new("docker")
+            .args(&args)
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .status()
+            .map_err(DockerBuildError::SpawnFailed)?;
 
         if status.success() {
             debug!(%image_name, "Image built successfully");
