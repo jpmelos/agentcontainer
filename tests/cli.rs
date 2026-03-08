@@ -51,6 +51,8 @@ mod tests {
             .env("HOME", home_dir.path())
             .env_remove("AGENTCONTAINER_DOCKERFILE")
             .env_remove("AGENTCONTAINER_BUILD_CONTEXT")
+            .env_remove("AGENTCONTAINER_BUILD_ARGUMENTS")
+            .env_remove("AGENTCONTAINER_PRE_BUILD")
             .env_remove("AGENTCONTAINER_PROJECT_NAME")
             .env_remove("AGENTCONTAINER_USERNAME")
             .env_remove("AGENTCONTAINER_TARGET")
@@ -60,7 +62,6 @@ mod tests {
             .env_remove("AGENTCONTAINER_NO_REBUILD")
             .env_remove("AGENTCONTAINER_VOLUMES")
             .env_remove("AGENTCONTAINER_ENVIRONMENT_VARIABLES")
-            .env_remove("AGENTCONTAINER_PRE_BUILD")
             .env_remove("AGENTCONTAINER_PRE_RUN")
             .current_dir(cwd.path());
 

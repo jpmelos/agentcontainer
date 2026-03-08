@@ -100,10 +100,6 @@ impl DockerBackend for RealDockerBackend {
 
         args.extend(["-f".into(), config.dockerfile.clone()]);
 
-        if let Some(ref target) = config.target {
-            args.extend(["--target".into(), target.clone()]);
-        }
-
         for (key, entry) in &config.build_arguments {
             match *entry {
                 BuildArgumentEntry::Value(ref value) => {
@@ -118,6 +114,10 @@ impl DockerBackend for RealDockerBackend {
                     )
                 }
             }
+        }
+
+        if let Some(ref target) = config.target {
+            args.extend(["--target".into(), target.clone()]);
         }
 
         if config.no_build_cache {

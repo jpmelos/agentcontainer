@@ -325,10 +325,10 @@ TOML. For example:
 ```sh
 AGENTCONTAINER_DOCKERFILE=".agentcontainer/Dockerfile"
 AGENTCONTAINER_BUILD_CONTEXT="."
-AGENTCONTAINER_VOLUMES='{"/workspace" = "~/projects/myproject", "~/.ssh" = true}'
-AGENTCONTAINER_ENVIRONMENT_VARIABLES='{EDITOR = "nvim", SSH_AUTH_SOCK = true}'
 AGENTCONTAINER_BUILD_ARGUMENTS='{BUILD_DATE = "2026-03-06", HOME = true}'
 AGENTCONTAINER_ALLOW_STALE=true # or `false`
+AGENTCONTAINER_VOLUMES='{"/workspace" = "~/projects/myproject", "~/.ssh" = true}'
+AGENTCONTAINER_ENVIRONMENT_VARIABLES='{EDITOR = "nvim", SSH_AUTH_SOCK = true}'
 ```
 
 ## Commands
@@ -382,8 +382,8 @@ agentcontainer run -- --print --output-format json
 agentcontainer --project-name foo run -- --help
 ```
 
-The build step honors all build-related configuration keys (`force_rebuild`,
-`no_rebuild`, `allow_stale`, `no_build_cache`, etc.). If the image is already
+The build step honors all build-related configuration keys (`allow_stale`,
+`force_rebuild`, `no_build_cache`, `no_rebuild`, etc.). If the image is already
 up to date, the build is skipped and the container starts immediately.
 
 The container is started with:
