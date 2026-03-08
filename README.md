@@ -135,16 +135,19 @@ cat <<EOF
 EOF
 ```
 
+A leading `~` in the path is expanded to the user's home directory. Only `~`
+alone or `~/…` is expanded; `~user/…` and embedded tildes are left untouched.
+
 In TOML configuration:
 
 ```toml
-pre_build = "./hooks/pre-build.sh"
+pre_build = "~/hooks/pre-build.sh"
 ```
 
 On the CLI:
 
 ```sh
-agentcontainer build --pre-build ./hooks/pre-build.sh
+agentcontainer build --pre-build ~/hooks/pre-build.sh
 ```
 
 ### Volumes
@@ -239,16 +242,20 @@ Example hook script:
 echo '["--network", "host"]'
 ```
 
+A leading `~` in the path is expanded to the user's home directory, just like
+for volume paths and `pre_build`. Only `~` alone or `~/…` is expanded;
+`~user/…` and embedded tildes are left untouched.
+
 In TOML configuration:
 
 ```toml
-pre_run = "./hooks/pre-run.sh"
+pre_run = "~/hooks/pre-run.sh"
 ```
 
 On the CLI:
 
 ```sh
-agentcontainer run --pre-run ./hooks/pre-run.sh
+agentcontainer run --pre-run ~/hooks/pre-run.sh
 ```
 
 ### Container naming

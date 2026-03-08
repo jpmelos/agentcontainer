@@ -11,6 +11,7 @@
 //! `~/.ssh` and `/home/alice/.ssh` from different sources are recognized as the same key during
 //! priority resolution.
 
+use crate::utils::paths::expand_tilde;
 use figment::{
     Error, Metadata, Profile, Provider,
     value::{Dict, Map, Value},
@@ -52,21 +53,6 @@ impl Provider for MergingProvider {
             }
         }
         Ok(Profile::Default.collect(merged))
-    }
-}
-
-/// Replace a leading `~` in a path with the given home directory.
-///
-/// Only `~` alone or `~/…` is expanded; `~user/…` and embedded tildes are left untouched.
-/// A trailing slash on `home_dir` is stripped to avoid producing double slashes.
-fn expand_tilde(path: &str, home_dir: &str) -> String {
-    let home_dir = home_dir.trim_end_matches('/');
-    if path == "~" {
-        String::from(home_dir)
-    } else if let Some(rest) = path.strip_prefix("~/") {
-        format!("{home_dir}/{rest}")
-    } else {
-        String::from(path)
     }
 }
 

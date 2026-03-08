@@ -3,6 +3,7 @@
 
 mod merging_provider;
 
+use crate::utils::paths::expand_tilde;
 use crate::utils::slugify::slugify;
 use clap::{Parser, Subcommand};
 use figment::{
@@ -644,6 +645,7 @@ pub(crate) fn get_config<'cli_args>(
     let mut config: Config =
         Figment::from(MergingProvider::new(providers, String::from(home_dir))).extract()?;
 
+    expand_config_paths(&mut config, home_dir);
     validate_config(&config)?;
     clean_config(&mut config);
 
@@ -773,6 +775,20 @@ fn is_valid_env_var_key(key: &str) -> bool {
             .next()
             .is_some_and(|b| b.is_ascii_alphabetic() || b == b'_')
         && key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+}
+
+/// Expand leading `~` to `home_dir` in config path fields.
+///
+/// This mirrors the tilde expansion applied to volume paths during merging, so that
+/// `pre_build = "~/hooks/build.sh"` and `pre_run = "~/hooks/run.sh"` resolve to absolute paths
+/// under the user's home directory.
+fn expand_config_paths(config: &mut Config, home_dir: &str) {
+    if let Some(ref mut path) = config.pre_build {
+        *path = expand_tilde(path, home_dir);
+    }
+    if let Some(ref mut path) = config.pre_run {
+        *path = expand_tilde(path, home_dir);
+    }
 }
 
 /// Validate a fully-merged `Config`, returning the first error found.
