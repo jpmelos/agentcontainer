@@ -15,6 +15,6 @@ docker run \
     --name agentcontainer-dev \
     --rm \
     --detach \
-    --volume "$(pwd):/home/$(whoami)/agentcontainer" \
-    --workdir "/home/$(whoami)/agentcontainer" \
+    --volume "$(pwd):$(pwd)" \
+    --workdir "$(pwd)" \
     agentcontainer-dev

@@ -1,0 +1,13 @@
+pre_build = ".agentcontainer/get_build_args.sh"
+pre_run = ".agentcontainer/get_run_args.sh"
+
+[build_arguments]
+HOME = true
+
+[volumes]
+"~/.claude" = true
+"~/.claude.json" = true
+
+[environment_variables]
+TZ = true
+DOCKER_HOST = "unix:///var/run/docker.sock"
