@@ -539,6 +539,15 @@ The `pre_build` and `pre_run` scripts could do anything you need. For example:
   `--env` or `--env-file`.
 - Fetch your GitHub token and inject it into the agent container as `GH_TOKEN`.
 
+## Roadmap
+
+- **`in_build` hooks:** Executables to be injected into the build context and
+  executed during the build process to allow customizing the image itself.
+- **`post_run` hooks:** These hooks will receive the raw output of the AI
+  harness, processes it, and outputs what should be printed to the user instead
+  of the Ai harness output. Useful in print mode with raw JSON output, for
+  example.
+
 ## Contributing
 
 1. Fork this project.
