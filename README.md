@@ -1,6 +1,31 @@
-# agentcontainer
+<div align="center">
 
-A standard way to declare and run agent containers for your projects.
+<img src="logo.png" alt="agentcontainer" style="max-height:200px; margin-bottom:10px">
+
+[![CI](https://github.com/jpmelos/agentcontainer/actions/workflows/ci.yaml/badge.svg)](https://github.com/jpmelos/agentcontainer/actions/workflows/ci.yaml)
+
+</div>
+
+A standard way to declare and run agent containers for your projects. Clone a
+repo, run one command, and talk to a fully configured AI agent:
+
+- **Zero setup**: `agentcontainer run` builds and launches a container with
+  every tool your agent needs, as declared by the project maintainer.
+- **Composable**: Your local configuration merges with the project's, so you
+  keep your own agent harness and credentials while inheriting project-specific
+  tooling.
+- **Reproducible**: The container is the environment. Every contributor gets
+  the same agent setup, every time.
+
+## Quick start
+
+```bash
+cargo install --locked agentcontainer
+git clone git@github.com:your-org/your-project
+cd your-project
+agentcontainer run
+# Talk to the LLM.
+```
 
 ## Installation
 
@@ -178,8 +203,10 @@ In TOML configuration:
 
 ```toml
 pre_build = ["~/hooks/pre-build.sh"]
-pre_build = ["scripts/pre-build.sh"]   # resolved relative to the current working directory
-pre_build = ["hooks/a.sh", "hooks/b.sh"]   # multiple hooks in one source
+pre_build = [
+  "scripts/pre-build.sh",
+] # resolved relative to the current working directory
+pre_build = ["hooks/a.sh", "hooks/b.sh"] # multiple hooks in one source
 ```
 
 On the CLI (repeatable):
@@ -329,8 +356,10 @@ In TOML configuration:
 
 ```toml
 pre_run = ["~/hooks/pre-run.sh"]
-pre_run = ["scripts/pre-run.sh"]   # resolved relative to the current working directory
-pre_run = ["hooks/a.sh", "hooks/b.sh"]   # multiple hooks in one source
+pre_run = [
+  "scripts/pre-run.sh",
+] # resolved relative to the current working directory
+pre_run = ["hooks/a.sh", "hooks/b.sh"] # multiple hooks in one source
 ```
 
 On the CLI (repeatable):
@@ -457,3 +486,74 @@ The container is started with:
 - **TTY mode**: `--tty` (allocate pseudo-TTY) and `--interactive` (keep stdin
   open) are only added when standard input is a TTY. This means piped or
   scripted invocations won't cause Docker to hang or emit spurious warnings.
+
+## Example
+
+This project is the example.
+
+First, we have [`.agentcontainer/Dockerfile`](.agentcontainer/Dockerfile). It
+installs all the tools the agent will need to interact with this project during
+development. For example:
+
+- `docker`, so the agent can interact with the development container.
+- `git` and `gh` to interact with Git history and GitHub PRs.
+- Prepares the container with the current user's ID and group ID to avoid
+  permission problems.
+- Mechanisms to bust image caching to easily update the agent harness
+  periodically.
+- Install an agent harness (Claude Code).
+
+And the [`.agentcontainer/config.toml`](.agentcontainer/config.toml) file
+configures scripts that allow customization of Docker build arguments and
+Docker run arguments.
+
+- The [`pre_build`](.agentcontainer/get_build_args.sh) hook takes care of
+  passing the current user's ID and group ID to the image, and today's date to
+  bust the cache daily to update the agent harness.
+- The [`pre_run`](.agentcontainer/get_run_args.sh) hook takes care of exposing
+  the right Docker socket for Docker-in-Docker functionality.
+
+`agentcontainer` always mounts the project into the container, and it
+automatically detects if it is in a Git worktree and, if so, makes sure to also
+mount the main worktree to make sure Git commands will be available to the
+agent.
+
+The [`CLAUDE.md`](CLAUDE.md) tells the agent about the development tools it has
+available (one to run the linters, and one to run the tests), and those tools
+take care of everything for the agent (building the development container and
+running it if needed).
+
+The objective is that all you have to do is download the project, run
+`agentcontainer run`, and start talking to the LLM. Describe the change you
+want to make, and off it goes all the way to making a commit. If you leverage
+the flexible configuration from above by sharing a `GH_TOKEN`, it could even
+push the PR for you.
+
+The `pre_build` and `pre_run` scripts could do anything you need. For example:
+
+- Dynamically customize your `~/.claude/settings.json` file depending on each
+  project's needs, push the settings to a temporary file, and mount that
+  temporary file into the agent container.
+- Fetch your LLM provider API key from your secret manager (1Password,
+  LastPass, BitWarden, `age`) and inject it into the agent container via
+  `--env` or `--env-file`.
+- Fetch your GitHub token and inject it into the agent container as `GH_TOKEN`.
+
+## Contributing
+
+1. Fork this project.
+2. Download it locally.
+3. If you want assistance from Claude Code, run `agentcontainer run`.
+4. Make your changes.
+5. Push your changes to your forked repository.
+6. Create a PR.
+
+## License
+
+This project is licensed under the [MIT license](LICENSE).
+
+### Contributions
+
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in this repository by you shall be licensed as MIT, without any
+additional terms or conditions.
