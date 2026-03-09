@@ -5,10 +5,22 @@ trap 'echo "Exit status $? at line $LINENO from: $BASH_COMMAND" >&2' ERR
 # Read the current hookable arguments from the file passed as `$1`, append extra
 # `--volume` entries, and output the result as a TOML document with an `args`
 # key.
-#
+
 # Uses `toml` (`toml-cli`) to parse the input, so any valid TOML document with
 # an `args` key is accepted (single-line, multi-line, etc.). Uses `jq` to merge
 # arrays. The output is a JSON-style inline array, which is valid TOML.
+for cmd in toml jq; do
+    if ! command -v "$cmd" &> /dev/null; then
+        echo "Required tool '$cmd' is not installed." >&2
+        exit 1
+    fi
+done
+
+# We'll try to mount `~/.claude.json` into the container, and if it doesn't
+# exist in the host by that time, Docker will create a directory instead. This
+# will conflict with the file that already exists at the container, and
+# creating the container will fail.
+[[ -f "$HOME/.claude.json" ]] || echo '{}' > "$HOME/.claude.json"
 
 # Detect the Docker socket path on the host.
 if [[ -S "${HOME}/.docker/run/docker.sock" ]]; then
@@ -21,13 +33,6 @@ else
     echo "Could not find Docker socket." >&2
     exit 1
 fi
-
-for cmd in toml jq; do
-    if ! command -v "$cmd" &>/dev/null; then
-        echo "Required tool '$cmd' is not installed." >&2
-        exit 1
-    fi
-done
 
 input_file="$1"
 

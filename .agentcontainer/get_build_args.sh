@@ -5,13 +5,12 @@ trap 'echo "Exit status $? at line $LINENO from: $BASH_COMMAND" >&2' ERR
 # Read the current hookable arguments from the file passed as `$1`, append extra
 # `--build-arg` entries, and output the result as a TOML document with an `args`
 # key.
-#
+
 # Uses `toml` (`toml-cli`) to parse the input, so any valid TOML document with
 # an `args` key is accepted (single-line, multi-line, etc.). Uses `jq` to merge
 # arrays. The output is a JSON-style inline array, which is valid TOML.
-
 for cmd in toml jq; do
-    if ! command -v "$cmd" &>/dev/null; then
+    if ! command -v "$cmd" &> /dev/null; then
         echo "Required tool '$cmd' is not installed." >&2
         exit 1
     fi
