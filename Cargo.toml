@@ -1,6 +1,6 @@
 [package]
 name = "agentcontainer"
-version = "0.1.0"
+version = "0.1.1-dev"
 edition = "2024"
 description = "A standard way to declare and run agent containers for your projects."
 authors = ["João Sampaio <jpmelos@gmail.com>"]
