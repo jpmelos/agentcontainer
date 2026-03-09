@@ -4,5 +4,6 @@ pub(crate) mod fs;
 pub(crate) mod git;
 pub(crate) mod logging;
 pub(crate) mod paths;
+pub(crate) mod processes;
 pub(crate) mod random;
 pub(crate) mod slugify;

@@ -14,6 +14,8 @@ use tempfile::NamedTempFile;
 use toml::de::Error as TomlError;
 use tracing::debug;
 
+use crate::utils::processes::ChildGuard;
+
 /// Execute all pre-build hooks and return the final `docker build` arguments.
 ///
 /// `initial_args` contains the hookable arguments computed from the configuration (e.g.
@@ -72,12 +74,17 @@ fn execute_hook(path: &str, hook_label: &str, current_args: &[String]) -> Result
         .write_all(input.as_bytes())
         .with_context(|| format!("Failed to write input file for {hook_label} hook {path:?}"))?;
 
-    let output = Command::new(path)
+    let child = Command::new(path)
         .arg(tmpfile.path())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .output()
+        .spawn()
         .with_context(|| format!("Failed to execute {hook_label} hook {path:?}"))?;
+    let guard = ChildGuard::new(child);
+
+    let output = guard
+        .wait_with_output()
+        .with_context(|| format!("Failed to wait on {hook_label} hook {path:?}"))?;
 
     if !output.status.success() {
         let stderr_text = String::from_utf8_lossy(&output.stderr);
