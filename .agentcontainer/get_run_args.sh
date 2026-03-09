@@ -22,6 +22,13 @@ else
     exit 1
 fi
 
+for cmd in toml jq; do
+    if ! command -v "$cmd" &>/dev/null; then
+        echo "Required tool '$cmd' is not installed." >&2
+        exit 1
+    fi
+done
+
 input_file="$1"
 
 # Extract the existing args as a JSON array.

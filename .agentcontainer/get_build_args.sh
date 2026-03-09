@@ -10,6 +10,13 @@ trap 'echo "Exit status $? at line $LINENO from: $BASH_COMMAND" >&2' ERR
 # an `args` key is accepted (single-line, multi-line, etc.). Uses `jq` to merge
 # arrays. The output is a JSON-style inline array, which is valid TOML.
 
+for cmd in toml jq; do
+    if ! command -v "$cmd" &>/dev/null; then
+        echo "Required tool '$cmd' is not installed." >&2
+        exit 1
+    fi
+done
+
 input_file="$1"
 
 # Extract the existing args as a JSON array.
