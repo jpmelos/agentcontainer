@@ -7,6 +7,8 @@ authors = ["João Sampaio <jpmelos@gmail.com>"]
 license = "MIT"
 homepage = "https://github.com/jpmelos/agentcontainer"
 repository = "https://github.com/jpmelos/agentcontainer"
+documentation = "https://github.com/jpmelos/agentcontainer"
+readme = "README.md"
 keywords = ["agent", "cli", "container"]
 categories = [
   "artificial-intelligence",
@@ -14,8 +16,7 @@ categories = [
   "command-line-utilities",
   "development-tools",
 ]
-readme = "README.md"
-include = ["Cargo.lock", "Cargo.toml", "LICENSE", "README.md", "src/*"]
+include = ["Cargo.lock", "Cargo.toml", "LICENSE", "README.md", "src", "tests"]
 
 [dependencies]
 anyhow = "1.0.102"
