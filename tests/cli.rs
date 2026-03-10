@@ -63,6 +63,7 @@ mod tests {
             .env_remove("AGENTCONTAINER_VOLUMES")
             .env_remove("AGENTCONTAINER_ENVIRONMENT_VARIABLES")
             .env_remove("AGENTCONTAINER_PRE_RUN")
+            .env_remove("AGENTCONTAINER_POST_RUN")
             .current_dir(cwd.path());
 
         let expected_dockerfile = format!("{cwd_str}/.agentcontainer/Dockerfile");

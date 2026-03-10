@@ -125,6 +125,14 @@ pub(crate) struct Config {
     /// are concatenated (lower-priority first).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) pre_run: Vec<String>,
+
+    /// Paths to executables to run after `docker run`. Each hook receives the path to a file
+    /// containing the stdout from the previous stage (or from `docker run` itself for the first
+    /// hook) and prints the transformed output to its own stdout. When non-empty, `docker run`
+    /// stdout is captured instead of inherited. Lists from multiple config sources are
+    /// concatenated (lower-priority first).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) post_run: Vec<String>,
 }
 
 impl Config {
@@ -285,8 +293,9 @@ pub(crate) fn get_config<'cli_args>(
         providers.push(Box::new(Serialized::defaults(cli_dict_args)));
     }
 
-    // CLI list args (`pre_build`, `pre_run`): empty fields are skipped during serialization so
-    // that an absent flag does not override lists from lower-priority config sources.
+    // CLI list args (`pre_build`, `pre_run`, `post_run`): empty fields are skipped during
+    // serialization so that an absent flag does not override lists from lower-priority config
+    // sources.
     {
         #[derive(Serialize)]
         struct CliListArgs {
@@ -294,10 +303,13 @@ pub(crate) fn get_config<'cli_args>(
             pre_build: Vec<String>,
             #[serde(skip_serializing_if = "Vec::is_empty")]
             pre_run: Vec<String>,
+            #[serde(skip_serializing_if = "Vec::is_empty")]
+            post_run: Vec<String>,
         }
         let cli_list_args = CliListArgs {
             pre_build: cli_args.pre_build.clone(),
             pre_run: cli_args.pre_run.clone(),
+            post_run: cli_args.post_run.clone(),
         };
         providers.push(Box::new(Serialized::defaults(cli_list_args)));
     }
@@ -430,15 +442,20 @@ fn validate_config(config: &Config) -> Result<(), ConfigError> {
         return Err(ConfigError::EmptyPreRun);
     }
 
+    if config.post_run.iter().any(|path| path.is_empty()) {
+        return Err(ConfigError::EmptyPostRun);
+    }
+
     Ok(())
 }
 
 /// Expand leading `~` to `home_dir` and resolve relative paths to absolute using the current
 /// working directory.
 ///
-/// For `dockerfile`, `build_context`, and each entry in `pre_build` and `pre_run`: tildes are
-/// expanded, and relative paths are resolved relative to the current working directory. These
-/// fields must not be empty; `validate_config` is expected to run before this function.
+/// For `dockerfile`, `build_context`, and each entry in `pre_build`, `pre_run`, and `post_run`:
+/// tildes are expanded, and relative paths are resolved relative to the current working
+/// directory. These fields must not be empty; `validate_config` is expected to run before this
+/// function.
 ///
 /// For volume host paths: relative paths that look like filesystem paths (start with `.` or
 /// contain `/`) are resolved relative to the current working directory. Paths that do not start
@@ -507,6 +524,17 @@ fn expand_config_paths(config: &mut Config, home_dir: &str, cwd: &str) {
             );
         }
         *pre_run_path = expand_and_resolve_path(pre_run_path, home_dir, cwd);
+    }
+
+    for post_run_path in &mut config.post_run {
+        if has_tilde_user_prefix(post_run_path) {
+            warn!(
+                path = %post_run_path,
+                "The `~user` syntax is not supported in `post_run`; \
+                 treating as a relative path."
+            );
+        }
+        *post_run_path = expand_and_resolve_path(post_run_path, home_dir, cwd);
     }
 }
 

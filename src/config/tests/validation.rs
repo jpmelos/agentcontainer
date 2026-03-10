@@ -628,3 +628,135 @@ mod pre_run {
         );
     }
 }
+
+mod post_run {
+    use super::*;
+
+    #[test]
+    fn empty_post_run_entry_in_config_file_is_an_error() {
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        write_file(
+            &cwd.path().join(".agentcontainer/config.toml"),
+            r#"post_run = [""]"#,
+        );
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
+        let cli_args = default_cli_args(Command::Config);
+
+        let error = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8"),
+            &cli_args,
+        )
+        .expect_err("Expected `get_config` to fail with an empty post_run entry");
+
+        assert!(
+            matches!(error, ConfigError::EmptyPostRun),
+            "Expected `ConfigError::EmptyPostRun`, got: {error:?}"
+        );
+    }
+
+    #[test]
+    fn string_post_run_in_config_file_is_a_config_error() {
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        write_file(
+            &cwd.path().join(".agentcontainer/config.toml"),
+            r#"post_run = "not-a-list""#,
+        );
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
+        let cli_args = default_cli_args(Command::Config);
+
+        let error = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8"),
+            &cli_args,
+        )
+        .expect_err("Expected `get_config` to fail with a non-list post_run");
+
+        assert!(
+            matches!(error, ConfigError::Extract(_)),
+            "Expected `ConfigError::Extract`, got: {error:?}"
+        );
+    }
+
+    #[test]
+    fn empty_post_run_entry_via_env_var_is_an_error() {
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
+        // SAFETY: `set_var` is safe here because `cargo nextest` runs each test in its own
+        // process, so there are no other threads to race with.
+        unsafe {
+            env::set_var("AGENTCONTAINER_POST_RUN", r#"[""]"#);
+        };
+        let cli_args = default_cli_args(Command::Config);
+
+        let error = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8"),
+            &cli_args,
+        )
+        .expect_err("Expected `get_config` to fail with an empty post_run entry");
+
+        assert!(
+            matches!(error, ConfigError::EmptyPostRun),
+            "Expected `ConfigError::EmptyPostRun`, got: {error:?}"
+        );
+    }
+
+    #[test]
+    fn string_post_run_via_env_var_is_a_config_error() {
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
+        // SAFETY: `set_var` is safe here because `cargo nextest` runs each test in its own
+        // process, so there are no other threads to race with.
+        unsafe {
+            env::set_var("AGENTCONTAINER_POST_RUN", "not-a-list");
+        };
+        let cli_args = default_cli_args(Command::Config);
+
+        let error = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8"),
+            &cli_args,
+        )
+        .expect_err("Expected `get_config` to fail with a non-list post_run");
+
+        assert!(
+            matches!(error, ConfigError::Extract(_)),
+            "Expected `ConfigError::Extract`, got: {error:?}"
+        );
+    }
+
+    #[test]
+    fn empty_post_run_via_cli_is_an_error() {
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        env::set_current_dir(cwd.path()).expect("Failed to set current directory");
+        let cli_args = CliArgsBuilder::new(Command::Config).post_run(&[""]).build();
+
+        let error = get_config(
+            home_dir
+                .path()
+                .to_str()
+                .expect("Temporary directory path is not valid UTF-8"),
+            &cli_args,
+        )
+        .expect_err("Expected `get_config` to fail with an empty post_run");
+
+        assert!(
+            matches!(error, ConfigError::EmptyPostRun),
+            "Expected `ConfigError::EmptyPostRun`, got: {error:?}"
+        );
+    }
+}

@@ -96,6 +96,9 @@ pub(crate) enum ConfigError {
     /// A `pre_run` entry is an empty string.
     #[error("`pre_run` entries must not be empty strings")]
     EmptyPreRun,
+    /// A `post_run` entry is an empty string.
+    #[error("`post_run` entries must not be empty strings")]
+    EmptyPostRun,
     /// Figment failed to extract the configuration.
     #[error("Failed to load configuration: {0}")]
     Extract(Box<figment::Error>),

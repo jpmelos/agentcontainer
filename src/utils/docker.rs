@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use std::convert::Infallible;
 use std::io::Error as IoError;
 use std::os::unix::process::CommandExt as _;
-use std::process::{Command, ExitStatus, Stdio};
+use std::process::{Command, ExitStatus, Output, Stdio};
 use thiserror::Error;
 use tracing::debug;
 
@@ -40,6 +40,13 @@ pub(crate) trait DockerBackend {
     /// On success, the current process is replaced and this method never returns. On failure,
     /// returns the I/O error from the `exec` system call.
     fn exec_docker_run(&self, args: &[String]) -> Result<Infallible, IoError>;
+
+    /// Spawn `docker run` as a child process with stdout captured.
+    ///
+    /// Unlike `exec_docker_run`, this does not replace the current process. Instead, it spawns
+    /// Docker as a child process with stdout piped (for capture) while inheriting stderr and
+    /// stdin. Returns the child's `Output` (including captured stdout and exit status).
+    fn spawn_docker_run(&self, args: &[String]) -> Result<Output, IoError>;
 }
 
 /// The real Docker backend that shells out to the `docker` CLI.
@@ -106,5 +113,16 @@ impl DockerBackend for RealDockerBackend {
         debug!(?args, "Executing `docker run`");
         let error = Command::new("docker").args(args).exec();
         Err(error)
+    }
+
+    fn spawn_docker_run(&self, args: &[String]) -> Result<Output, IoError> {
+        debug!(?args, "Spawning `docker run`");
+        let child = Command::new("docker")
+            .args(args)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .stdin(Stdio::inherit())
+            .spawn()?;
+        child.wait_with_output()
     }
 }

@@ -66,6 +66,7 @@ lowest to highest priority:
 | `volumes`               | _(empty)_                                          | Host-to-container volume mounts. See [Volumes](#volumes).                                                         |
 | `environment_variables` | _(empty)_                                          | Environment variables for the container. See [Container environment variables](#container-environment-variables). |
 | `pre_run`               | _(empty)_                                          | Paths to executables to run before `docker run`. See [Pre-run hooks](#pre-run-hooks).                             |
+| `post_run`              | _(empty)_                                          | Paths to executables to run after `docker run`. See [Post-run hooks](#post-run-hooks).                            |
 
 `force_rebuild` and `no_rebuild` are mutually exclusive.
 
@@ -76,8 +77,8 @@ global config sets `target = "builder"`, a project config can override it with
 variables (`AGENTCONTAINER_TARGET="!"`) and CLI (`--target "!"`).
 
 `dockerfile`, `build_context`, and `target` must not be set to an empty string.
-Setting any of them to `""` is a validation error. `pre_build` and `pre_run`
-entries must not be empty strings.
+Setting any of them to `""` is a validation error. `pre_build`, `pre_run`, and
+`post_run` entries must not be empty strings.
 
 ### Path resolution for `dockerfile` and `build_context`
 
@@ -369,6 +370,74 @@ agentcontainer run --pre-run ~/hooks/pre-run.sh
 agentcontainer run --pre-run hooks/a.sh --pre-run hooks/b.sh
 ```
 
+### Post-run hooks
+
+The `post_run` option specifies a list of paths to executables that run after
+`docker run`. Hooks form an output pipeline: the first hook receives the
+captured stdout from `docker run`, and each subsequent hook receives the output
+of the previous one. The final output is written to `agentcontainer`'s stdout.
+
+When `post_run` hooks are configured, `docker run` is spawned as a child
+process instead of replacing the current process via `exec`. This means stdout
+is captured rather than inherited. Stderr is always inherited, so container
+diagnostics and error messages are visible to the user in real-time.
+
+**Note:** When `post_run` hooks are present, TTY allocation (`--tty` and
+`--interactive`) is disabled because a pseudo-TTY merges stdout and stderr into
+a single stream, which would corrupt the captured output. This means the
+container runs in non-interactive mode.
+
+Lists from multiple config sources are concatenated (lower-priority first). For
+example, a hook defined in `config.toml` runs before one added via
+`config.local.toml` or the CLI.
+
+This provides a way to post-process the container's output, for example to
+filter, transform, or reformat it before presenting it to the user.
+
+Each hook:
+
+- Receives the path to a temporary file as its first argument (`$1`). The file
+  contains the stdout from the previous stage (or from `docker run` itself for
+  the first hook).
+- Must print the transformed output to its own stdout.
+- Must exit with status 0.
+
+Example hook script:
+
+```sh
+#!/bin/sh
+set -euo pipefail
+
+input_file="$1"
+
+# Strip ANSI escape codes from the container output.
+sed 's/\x1b\[[0-9;]*m//g' "$input_file"
+```
+
+A leading `~` in each path is expanded to the user's home directory, just like
+for volume paths, `pre_build`, and `pre_run`. Only `~` alone or `~/…` is
+expanded; `~user/…` and embedded tildes are left untouched. Relative paths are
+resolved against the current working directory. All paths are lexically
+normalized: `.` and `..` components are resolved and consecutive slashes are
+collapsed, without accessing the filesystem.
+
+In TOML configuration:
+
+```toml
+post_run = ["~/hooks/post-run.sh"]
+post_run = [
+  "scripts/post-run.sh",
+] # resolved relative to the current working directory
+post_run = ["hooks/a.sh", "hooks/b.sh"] # multiple hooks in one source
+```
+
+On the CLI (repeatable):
+
+```sh
+agentcontainer run --post-run ~/hooks/post-run.sh
+agentcontainer run --post-run hooks/a.sh --post-run hooks/b.sh
+```
+
 ### Container naming
 
 When running a container, the name is derived from the project name and a
@@ -414,6 +483,7 @@ AGENTCONTAINER_ALLOW_STALE=true # or `false`
 AGENTCONTAINER_VOLUMES='{"/workspace" = "~/projects/myproject", "~/.ssh" = true}'
 AGENTCONTAINER_ENVIRONMENT_VARIABLES='{EDITOR = "nvim", SSH_AUTH_SOCK = true}'
 AGENTCONTAINER_PRE_RUN='["~/hooks/pre-run.sh"]'
+AGENTCONTAINER_POST_RUN='["~/hooks/post-run.sh"]'
 ```
 
 ## Commands
@@ -445,8 +515,10 @@ when any of the following is true:
 ### `run`
 
 Run the agent container. The image is automatically built (or rebuilt if stale)
-before starting the container. This replaces the current process with
-`docker run` via `exec`.
+before starting the container. When no `post_run` hooks are configured, this
+replaces the current process with `docker run` via `exec`. When `post_run`
+hooks are present, `docker run` is spawned as a child process so its stdout can
+be captured and piped through the hook pipeline.
 
 ```
 agentcontainer run [-- <container-args>...]
@@ -543,10 +615,6 @@ The `pre_build` and `pre_run` scripts could do anything you need. For example:
 
 - **`in_build` hooks:** Executables to be injected into the build context and
   executed during the build process to allow customizing the image itself.
-- **`post_run` hooks:** These hooks will receive the raw output of the AI
-  harness, processes it, and outputs what should be printed to the user instead
-  of the Ai harness output. Useful in print mode with raw JSON output, for
-  example.
 
 ## Contributing
 

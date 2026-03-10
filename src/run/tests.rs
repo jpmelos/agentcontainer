@@ -20,6 +20,7 @@ fn make_config() -> Config {
         volumes: HashMap::new(),
         environment_variables: HashMap::new(),
         pre_run: vec![],
+        post_run: vec![],
     }
 }
 

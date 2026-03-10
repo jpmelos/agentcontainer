@@ -12,6 +12,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::io::Error as IoError;
+use std::process::Output;
 
 /// Construct a `Config` for use in tests, without going through CLI parsing or `figment`.
 fn make_config() -> Config {
@@ -30,6 +31,7 @@ fn make_config() -> Config {
         volumes: HashMap::new(),
         environment_variables: HashMap::new(),
         pre_run: vec![],
+        post_run: vec![],
     }
 }
 
@@ -164,6 +166,10 @@ impl DockerBackend for MockDocker {
 
     fn exec_docker_run(&self, _args: &[String]) -> Result<Infallible, IoError> {
         unreachable!("Build tests do not call `exec_docker_run`")
+    }
+
+    fn spawn_docker_run(&self, _args: &[String]) -> Result<Output, IoError> {
+        unreachable!("Build tests do not call `spawn_docker_run`")
     }
 }
 

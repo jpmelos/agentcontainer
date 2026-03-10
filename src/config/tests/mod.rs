@@ -31,6 +31,7 @@ struct CliArgsBuilder {
     volumes: Vec<String>,
     environment_variables: Vec<String>,
     pre_run: Vec<String>,
+    post_run: Vec<String>,
 }
 
 impl CliArgsBuilder {
@@ -51,6 +52,7 @@ impl CliArgsBuilder {
             volumes: vec![],
             environment_variables: vec![],
             pre_run: vec![],
+            post_run: vec![],
         }
     }
 
@@ -114,6 +116,11 @@ impl CliArgsBuilder {
         self
     }
 
+    fn post_run(mut self, values: &[&str]) -> Self {
+        self.post_run = values.iter().map(|s| String::from(*s)).collect();
+        self
+    }
+
     /// Consume the builder and produce the `CliArgs`.
     fn build(self) -> CliArgs {
         CliArgs {
@@ -132,6 +139,7 @@ impl CliArgsBuilder {
             volumes: self.volumes,
             environment_variables: self.environment_variables,
             pre_run: self.pre_run,
+            post_run: self.post_run,
         }
     }
 }
@@ -170,6 +178,7 @@ fn make_config() -> Config {
         volumes: HashMap::new(),
         environment_variables: HashMap::new(),
         pre_run: vec![],
+        post_run: vec![],
     }
 }
 

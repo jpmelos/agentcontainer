@@ -6,10 +6,11 @@ use crate::utils::git::GitContext;
 use std::convert::Infallible;
 use std::io::Error as IoError;
 use std::path::Path;
+use std::process::ExitStatus;
 use thiserror::Error;
 use tracing::debug;
 
-/// Errors that can be returned from `run`.
+/// Errors that can be returned from `run` or `run_and_capture`.
 #[derive(Debug, Error)]
 pub(crate) enum RunError {
     /// Failed to detect Git worktree information.
@@ -18,6 +19,12 @@ pub(crate) enum RunError {
     /// The `exec` system call failed.
     #[error("Failed to exec `docker run`: {0}")]
     Exec(#[source] IoError),
+    /// Failed to spawn `docker run` as a child process.
+    #[error("Failed to spawn `docker run`: {0}")]
+    Spawn(#[source] IoError),
+    /// The `docker run` process exited with a non-zero status.
+    #[error("`docker run` exited with {0}")]
+    NonZeroExit(ExitStatus),
 }
 
 /// Compute the hookable arguments for `docker run`.
@@ -71,54 +78,6 @@ pub(crate) fn build_docker_run_hookable_args(config: &Config) -> Vec<String> {
     }
 
     args
-}
-
-/// Run the agent container.
-///
-/// Assembles a `docker run` command and replaces the current process via `exec`. On success, the
-/// current process is replaced and this function never returns. On failure, returns a `RunError`.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "Each parameter represents a distinct concern (config, backends, process identity, \
-        filesystem context, container arguments); grouping them into a struct would add \
-        indirection without improving clarity."
-)]
-pub(crate) fn run(
-    config: &Config,
-    docker_backend: &impl DockerBackend,
-    git_context: &impl GitContext,
-    uid: u32,
-    gid: u32,
-    current_dir: &str,
-    random_suffix: u32,
-    container_args: &[String],
-    stdin_is_terminal: bool,
-    hookable_args: &[String],
-) -> Result<Infallible, RunError> {
-    let main_worktree = git_context
-        .main_worktree_root(Path::new(current_dir))
-        .map_err(RunError::GitWorktree)?;
-
-    let args = build_docker_run_args(
-        config,
-        uid,
-        gid,
-        current_dir,
-        main_worktree.as_deref(),
-        random_suffix,
-        container_args,
-        stdin_is_terminal,
-        hookable_args,
-    );
-
-    debug!(?args, "Assembled `docker run` arguments");
-
-    let image_name = config.get_image_name();
-    debug!(%image_name, "Running container");
-
-    docker_backend
-        .exec_docker_run(&args)
-        .map_err(RunError::Exec)
 }
 
 /// Assemble the argument list for `docker run`.
@@ -192,6 +151,138 @@ fn build_docker_run_args(
     args.extend_from_slice(container_args);
 
     args
+}
+
+/// Resolve the Git worktree and assemble the full `docker run` argument list.
+///
+/// This is the shared preamble for both `run` (exec) and `run_and_capture` (spawn). It resolves the
+/// main worktree root, builds the argument vector, and logs the result.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each parameter represents a distinct concern (config, backends, process identity, \
+        filesystem context, container arguments); grouping them into a struct would add \
+        indirection without improving clarity."
+)]
+fn prepare_docker_run_args(
+    config: &Config,
+    git_context: &impl GitContext,
+    uid: u32,
+    gid: u32,
+    current_dir: &str,
+    random_suffix: u32,
+    container_args: &[String],
+    stdin_is_terminal: bool,
+    hookable_args: &[String],
+) -> Result<Vec<String>, RunError> {
+    let main_worktree = git_context
+        .main_worktree_root(Path::new(current_dir))
+        .map_err(RunError::GitWorktree)?;
+
+    let args = build_docker_run_args(
+        config,
+        uid,
+        gid,
+        current_dir,
+        main_worktree.as_deref(),
+        random_suffix,
+        container_args,
+        stdin_is_terminal,
+        hookable_args,
+    );
+
+    debug!(?args, "Assembled `docker run` arguments");
+
+    let image_name = config.get_image_name();
+    debug!(%image_name, "Running container");
+
+    Ok(args)
+}
+
+/// Run the agent container.
+///
+/// Assembles a `docker run` command and replaces the current process via `exec`. On success, the
+/// current process is replaced and this function never returns. On failure, returns a `RunError`.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each parameter represents a distinct concern (config, backends, process identity, \
+        filesystem context, container arguments); grouping them into a struct would add \
+        indirection without improving clarity."
+)]
+pub(crate) fn run(
+    config: &Config,
+    docker_backend: &impl DockerBackend,
+    git_context: &impl GitContext,
+    uid: u32,
+    gid: u32,
+    current_dir: &str,
+    random_suffix: u32,
+    container_args: &[String],
+    stdin_is_terminal: bool,
+    hookable_args: &[String],
+) -> Result<Infallible, RunError> {
+    let args = prepare_docker_run_args(
+        config,
+        git_context,
+        uid,
+        gid,
+        current_dir,
+        random_suffix,
+        container_args,
+        stdin_is_terminal,
+        hookable_args,
+    )?;
+
+    docker_backend
+        .exec_docker_run(&args)
+        .map_err(RunError::Exec)
+}
+
+/// Run the agent container and capture its stdout.
+///
+/// Unlike `run`, this spawns `docker run` as a child process instead of using `exec`, so that
+/// stdout can be captured and returned. Stderr is inherited (passes through to the terminal). This
+/// is used when `post_run` hooks are configured and need to process the container's output.
+///
+/// Returns the captured stdout on success, or a `RunError` on failure.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each parameter represents a distinct concern (config, backends, process identity, \
+        filesystem context, container arguments); grouping them into a struct would add \
+        indirection without improving clarity."
+)]
+pub(crate) fn run_and_capture(
+    config: &Config,
+    docker_backend: &impl DockerBackend,
+    git_context: &impl GitContext,
+    uid: u32,
+    gid: u32,
+    current_dir: &str,
+    random_suffix: u32,
+    container_args: &[String],
+    stdin_is_terminal: bool,
+    hookable_args: &[String],
+) -> Result<Vec<u8>, RunError> {
+    let args = prepare_docker_run_args(
+        config,
+        git_context,
+        uid,
+        gid,
+        current_dir,
+        random_suffix,
+        container_args,
+        stdin_is_terminal,
+        hookable_args,
+    )?;
+
+    let output = docker_backend
+        .spawn_docker_run(&args)
+        .map_err(RunError::Spawn)?;
+
+    if !output.status.success() {
+        return Err(RunError::NonZeroExit(output.status));
+    }
+
+    Ok(output.stdout)
 }
 
 #[cfg(test)]

@@ -79,6 +79,14 @@ pub(crate) struct CliArgs {
     #[arg(long = "pre-run")]
     pub(super) pre_run: Vec<String>,
 
+    /// Path to an executable to run after `docker run`. Repeatable. Each hook receives the path
+    /// to a file containing the stdout from the previous stage (or from `docker run` itself for
+    /// the first hook) and prints the transformed output to its own stdout. When non-empty,
+    /// `docker run` stdout is captured instead of inherited. Values accumulate across config
+    /// sources.
+    #[arg(long = "post-run")]
+    pub(super) post_run: Vec<String>,
+
     #[command(subcommand)]
     pub(super) command: Command,
 }
