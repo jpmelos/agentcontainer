@@ -584,6 +584,18 @@ Docker run arguments.
   bust the cache daily to update the agent harness.
 - The [`pre_run`](.agentcontainer/get_run_args.sh) hook takes care of exposing
   the right Docker socket for Docker-in-Docker functionality.
+- The [`post_run`](.agentcontainer/process_claude_output.sh) hook processes
+  Claude Code's JSON output from `--print --output-format json` mode: it
+  extracts the result text, and appends a cost and duration summary. This hook
+  is not configured in `config.toml` because it is only useful for
+  non-interactive runs. Instead, pass it via `--post-run` when invoking the
+  container in print mode:
+  ```sh
+  agentcontainer \
+  	--post-run .agentcontainer/process_claude_output.sh \
+  	run \
+  	-- --print --output-format json -p "Your prompt here"
+  ```
 
 `agentcontainer` always mounts the project into the container, and it
 automatically detects if it is in a Git worktree and, if so, makes sure to also
