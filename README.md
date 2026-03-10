@@ -434,8 +434,8 @@ post_run = ["hooks/a.sh", "hooks/b.sh"] # multiple hooks in one source
 On the CLI (repeatable):
 
 ```sh
-agentcontainer run --post-run ~/hooks/post-run.sh
-agentcontainer run --post-run hooks/a.sh --post-run hooks/b.sh
+agentcontainer --post-run ~/hooks/post-run.sh run
+agentcontainer --post-run hooks/a.sh --post-run hooks/b.sh run
 ```
 
 ### Container naming
@@ -594,7 +594,7 @@ Docker run arguments.
   agentcontainer \
   	--post-run .agentcontainer/process_claude_output.sh \
   	run \
-  	-- --print --output-format json -p "Your prompt here"
+  	-- --print --output-format json "Your prompt here"
   ```
 
 `agentcontainer` always mounts the project into the container, and it
