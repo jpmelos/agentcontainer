@@ -17,6 +17,32 @@ repo, run one command, and talk to a fully configured AI agent:
 - **Reproducible**: The container is the environment. Every contributor gets
   the same agent setup, every time.
 
+## Table of contents
+
+- [Quick start](#quick-start)
+- [Installation](#installation)
+- [Configuration](#configuration)
+  - [Configuration keys](#configuration-keys)
+  - [Path resolution for `dockerfile` and `build_context`](#path-resolution-for-dockerfile-and-build_context)
+  - [Image naming](#image-naming)
+  - [Build arguments](#build-arguments)
+  - [Pre-build hooks](#pre-build-hooks)
+  - [Volumes](#volumes)
+  - [Container environment variables](#container-environment-variables)
+  - [Pre-run hooks](#pre-run-hooks)
+  - [Post-run hooks](#post-run-hooks)
+  - [Container naming](#container-naming)
+  - [Example configuration file](#example-configuration-file)
+  - [Environment variables](#environment-variables)
+- [Commands](#commands)
+  - [`config`](#config)
+  - [`build`](#build)
+  - [`run`](#run)
+- [Example](#example)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [License](#license)
+
 ## Quick start
 
 ```bash
@@ -490,7 +516,10 @@ AGENTCONTAINER_POST_RUN='["~/hooks/post-run.sh"]'
 
 ### `config`
 
-Print the resolved configuration, with all sources merged, as TOML.
+Print the resolved configuration, with all sources merged, as TOML. The output
+includes a comment header listing all configuration sources in priority order
+(lowest to highest), showing which config files were found on disk alongside
+built-in defaults, environment variables, and CLI arguments.
 
 ```
 agentcontainer config

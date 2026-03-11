@@ -21,6 +21,7 @@ fn make_config() -> Config {
         environment_variables: HashMap::new(),
         pre_run: vec![],
         post_run: vec![],
+        files_read: vec![],
     }
 }
 

@@ -68,7 +68,12 @@ mod tests {
 
         let expected_dockerfile = format!("{cwd_str}/.agentcontainer/Dockerfile");
         let expected_output = format!(
-            "dockerfile = \"{expected_dockerfile}\"\n\
+            "# Configuration sources (lowest priority first):\n\
+             # Built-in defaults\n\
+             # Environment variables\n\
+             # CLI arguments\n\
+             \n\
+             dockerfile = \"{expected_dockerfile}\"\n\
              build_context = \"{cwd_str}\"\n\
              project_name = \"{expected_project_name}\"\n\
              username = \"{expected_username}\"\n"
@@ -212,6 +217,26 @@ mod tests {
             .assert()
             .success()
             .stdout(contains(format!(r#"dockerfile = "{cwd_str}/from-xdg""#)));
+    }
+
+    #[test]
+    fn config_subcommand_shows_config_files_read() {
+        let home_dir = tempdir().expect("Failed to create temporary directory");
+        let cwd = tempdir().expect("Failed to create temporary directory");
+        let config_path = cwd.path().join(".agentcontainer/config.toml");
+        write_file(&config_path, r#"dockerfile = "from-cwd""#);
+
+        let config_path_str = config_path
+            .to_str()
+            .expect("Temporary directory path is not valid UTF-8");
+
+        Command::new(cargo_bin!("agentcontainer"))
+            .arg("config")
+            .env("HOME", home_dir.path())
+            .current_dir(cwd.path())
+            .assert()
+            .success()
+            .stdout(contains(format!("# {config_path_str}")));
     }
 
     #[test]

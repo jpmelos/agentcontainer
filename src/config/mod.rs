@@ -20,7 +20,7 @@ use figment::{
 };
 use merging_provider::MergingProvider;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, env};
+use std::{collections::HashMap, env, path::Path};
 use tracing::{debug, trace, warn};
 
 pub(crate) use cli::{CliArgs, Command};
@@ -133,6 +133,11 @@ pub(crate) struct Config {
     /// concatenated (lower-priority first).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) post_run: Vec<String>,
+
+    /// Paths of configuration files that were read, in priority order (lowest to highest).
+    /// Populated by `get_config` after extraction; not part of any configuration source.
+    #[serde(skip)]
+    pub(crate) files_read: Vec<String>,
 }
 
 impl Config {
@@ -239,18 +244,23 @@ pub(crate) fn get_config<'cli_args>(
 
     debug!("Loading configuration from all sources");
 
-    // Build the provider list in priority order (lowest to highest).
-    let mut providers: Vec<Box<dyn figment::Provider>> = vec![
-        Box::new(Toml::file(format!(
-            "{home_dir}/.config/agentcontainer/config.toml"
-        ))),
-        Box::new(Toml::file(format!(
-            "{home_dir}/.agentcontainer/config.toml"
-        ))),
-    ];
-
     // Get the current working directory once for ancestor config loading and path expansion.
     let cwd = env::current_dir().map_err(ConfigError::CurrentWorkingDirectoryUnavailable)?;
+
+    // Collect candidate config file paths (absolute) alongside the providers so we can report
+    // which files were actually read.
+    let mut config_file_candidates: Vec<String> = Vec::new();
+
+    let xdg_config_path = format!("{home_dir}/.config/agentcontainer/config.toml");
+    let home_config_path = format!("{home_dir}/.agentcontainer/config.toml");
+    config_file_candidates.push(xdg_config_path.clone());
+    config_file_candidates.push(home_config_path.clone());
+
+    // Build the provider list in priority order (lowest to highest).
+    let mut providers: Vec<Box<dyn figment::Provider>> = vec![
+        Box::new(Toml::file(&xdg_config_path)),
+        Box::new(Toml::file(&home_config_path)),
+    ];
 
     // Ancestor directory configs: traverse from `/` towards the current working directory
     // (exclusive), each providing `.agentcontainer/config.toml`. Closer to `/` has lower priority.
@@ -266,11 +276,17 @@ pub(crate) fn get_config<'cli_args>(
         .collect();
     ancestor_configs.reverse();
     for config_path in ancestor_configs {
+        config_file_candidates.push(config_path.to_string_lossy().into_owned());
         providers.push(Box::new(Toml::file(config_path)));
     }
 
-    providers.push(Box::new(Toml::file(".agentcontainer/config.toml")));
-    providers.push(Box::new(Toml::file(".agentcontainer/config.local.toml")));
+    let cwd_config_path = cwd.join(".agentcontainer/config.toml");
+    let cwd_local_config_path = cwd.join(".agentcontainer/config.local.toml");
+    config_file_candidates.push(cwd_config_path.to_string_lossy().into_owned());
+    config_file_candidates.push(cwd_local_config_path.to_string_lossy().into_owned());
+
+    providers.push(Box::new(Toml::file(&cwd_config_path)));
+    providers.push(Box::new(Toml::file(&cwd_local_config_path)));
     providers.push(Box::new(Env::prefixed("AGENTCONTAINER_")));
 
     // CLI dict args (`build_arguments`, `volumes`, and `environment_variables`) are combined into
@@ -337,6 +353,12 @@ pub(crate) fn get_config<'cli_args>(
     debug!("Extracting merged configuration");
     let mut config: Config =
         Figment::from(MergingProvider::new(providers, String::from(home_dir))).extract()?;
+
+    // Record which candidate config files actually exist on disk.
+    config.files_read = config_file_candidates
+        .into_iter()
+        .filter(|path| Path::new(path).is_file())
+        .collect();
 
     let cwd_str = cwd
         .to_str()

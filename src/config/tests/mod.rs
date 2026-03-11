@@ -2,6 +2,7 @@ mod build_arguments;
 mod clean;
 mod default_values;
 mod environment_variables;
+mod files_read;
 mod get_container_name;
 mod get_image_name;
 mod list_accumulation;
@@ -179,6 +180,7 @@ fn make_config() -> Config {
         environment_variables: HashMap::new(),
         pre_run: vec![],
         post_run: vec![],
+        files_read: vec![],
     }
 }
 

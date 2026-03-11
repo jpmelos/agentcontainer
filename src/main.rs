@@ -13,6 +13,7 @@ use build::BuildOutcome;
 use clap::Parser as _;
 use config::{CliArgs, Command};
 use std::env;
+use std::fmt::Write as _;
 use std::io::{IsTerminal as _, Write as _, stdin, stdout};
 use tracing::{info, warn};
 use utils::clock::SystemClock;
@@ -34,7 +35,16 @@ fn main() -> Result<()> {
 
     match *command_ref {
         Command::Config => {
-            let output = toml::to_string_pretty(&config)?;
+            let mut output = String::new();
+            output.push_str("# Configuration sources (lowest priority first):\n");
+            output.push_str("# Built-in defaults\n");
+            for path in &config.files_read {
+                writeln!(output, "# {path}").expect("writing to String cannot fail");
+            }
+            output.push_str("# Environment variables\n");
+            output.push_str("# CLI arguments\n");
+            output.push('\n');
+            output.push_str(&toml::to_string_pretty(&config)?);
             print!("{output}");
         }
         Command::Build => {
