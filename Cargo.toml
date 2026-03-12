@@ -33,7 +33,7 @@ tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 whoami = "2.1.1"
 
 [dev-dependencies]
-assert_cmd = "2.1.2"
+assert_cmd = "2.2.0"
 predicates = "3.1.4"
 
 # How to ensure that this list is comprehensive: see `docs/lints.md`.
