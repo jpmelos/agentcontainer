@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="media/logo-README.png" alt="agentcontainer" style="max-height:200px; margin-bottom:10px">
+<img src="media/logo-README.png" alt="agentcontainer">
 
 [![CI](https://github.com/jpmelos/agentcontainer/actions/workflows/ci.yaml/badge.svg)](https://github.com/jpmelos/agentcontainer/actions/workflows/ci.yaml)
 
